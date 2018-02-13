@@ -1,14 +1,14 @@
 # Site settings
-title:          Tale
-description:    "Minimal Jekyll theme for storytellers"
-baseurl:        "/tale"
-url:            "https://chesterhow.github.io"
+title:          Metody Sztucznej Inteligencji
+#description:    "Minimal Jekyll theme for storytellers"
+#baseurl:        "/tale"
+url:            "https://metsi.github.io"
 
 # Author
 author:
-  name:         Chester How
-  url:          https://chester.how
-  email:        chesterhow@gmail.com
+  name:         Paweł Ksieniewicz
+  url:          https://kssk.pwr.edu.pl/ksieniewicz
+  email:        pawel.ksieniewicz@pwr.edu.pl@gmail.com
 
 # Build settings
 markdown:       kramdown
@@ -23,5 +23,5 @@ plugins:
   - jekyll-paginate
 
 # Permalinks
-permalink:      /:year-:month-:day/:title
-paginate:       5
+permalink:      /:title
+paginate:       10
