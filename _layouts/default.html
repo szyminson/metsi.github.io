@@ -1,28 +1,17 @@
 <!DOCTYPE html>
+<!--
+    Type on Strap jekyll theme v2.0.0
+    Copyright 2016-2019 Sylhare
+    Theme free for personal and commercial use under the MIT license
+    https://github.com/sylhare/Type-on-Strap/blob/master/LICENSE
+-->
 <html lang="en">
-
   {% include head.html %}
-
   <body>
-    <nav class="nav">
-      <div class="nav-container">
-        <a href="{{ site.baseurl }}/">
-          <h2 class="nav-title">{{ site.title }}</h2>
-        </a>
-        <ul>
-          <!--<li><a href="{{ '/karta' | prepend: site.baseurl }}">Karta kursu</a></li>-->
-        </ul>
-    </div>
-  </nav>
-
-    <main>
+    {% include navbar.html %}
+    <div class="content">
       {{ content }}
-    </main>
-
-    <footer>
-      <span>
-        &copy; <time datetime="{{ site.time }}">{{ site.time | date: '%Y' }}</time> {{ site.author.name }}. Made with Jekyll using the <a href="https://github.com/chesterhow/tale/">Tale</a> theme.
-      </span>
-    </footer>
+    </div>
+    {% include footer.html %}
   </body>
 </html>
