@@ -1,0 +1,27 @@
+I"�<p>Zważywszy na czasy jakie nastały, pojawiła się konieczność przejścia na zdalny tryb dydaktyki. W związku z tym, dokładnie co tydzień, w poniedziałek o godzinie 19 będę udostępniać Państwu wykłady w formie około dwudziestominutowych filmów.</p>
+
+<!--more-->
+
+<p>Jedna godzina wykładu przeliczała mi się zawsze na właśnie dwadzieścia minut czytanego tekstu (może faktycznie odrobinę zbyt bardzo rozgaduję się o sprawach nieistotnych), więc dzięki temu, nawet jeśli nie powrócimy na uczelnię do końca semestru, uda się nam przerobić chociaż pierwszą połowę materiału kursu. Dodatkowo, dwa razy w tygodniu (środa i piątek) będę umieszczać na tej stronie krótkie wpisy z fragmentami kodu, które pozwalają realizować w Pythonie to, co już udało nam się wprowadzić na wykładzie.</p>
+
+<p>Każdy zaplanowany wykład rozbijemy więc na dwie dwudziestominutowe porcje, które powinni Państwo przyswoić w dwa tygodnie. W pierwszej zajmiemy się podstawami eksperymentów porównawczych.</p>
+
+<ul>
+  <li>Przypomnimy jakie procedury budują algorytm rozpoznawania wzorców,</li>
+  <li>poznamy złotą zasadę prowadzenia eksperymentów,</li>
+  <li>wyjaśnimy sobie różnicę pomiędzy pamięcią a inteligencją,</li>
+  <li>nauczymy się podstawowej metody podziału zbioru danych na uczący i testowy,</li>
+  <li>aby w ostatniej części wykładu zająć się podstawowymi metrykami oceny jakości modeli klasyfikacji binarnej.</li>
+</ul>
+
+<p>Wykład mogą Państwo obejrzeć na <a href="https://www.youtube.com/watch?v=vdZiMJTuFjc">kanale YouTube Koła Naukowego SISK</a>, które pracuje przy Katedrze Systemów i Sieci Komputerowych, albo bezpośrednio, o tutaj, na dole.</p>
+
+<div align="right">
+Spokojnych dni i całej góry zdrowia<br />
+Paweł Ksieniewicz
+</div>
+
+<hr />
+
+<iframe width="100%" height="400" src="https://www.youtube.com/embed/vdZiMJTuFjc" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen=""></iframe>
+:ET

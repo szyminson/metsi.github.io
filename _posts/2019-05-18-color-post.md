@@ -5,11 +5,12 @@ tags: [Test, Color, Markdown]
 color: brown
 author: sylhare
 excerpt_separator: <!--more-->
+published: false
 ---
 
 # What a colorful post!
 
-This is an idea that came from [xukimseven/HardCandy-Jekyll](https://github.com/xukimseven/HardCandy-Jekyll) 
+This is an idea that came from [xukimseven/HardCandy-Jekyll](https://github.com/xukimseven/HardCandy-Jekyll)
 looking at this cheerful and colorful them, I wanted to enable something similar for mine.
 
 You can go fork and star hers too! 😉
@@ -38,6 +39,6 @@ color: rgb(165,42,42)
 ---
 ```
 
-The background used is `lineart.png` from [xukimseven](https://github.com/xukimseven) you can edit it in the config file. 
-If you want another one, put it in `/assets/img` as well. 
+The background used is `lineart.png` from [xukimseven](https://github.com/xukimseven) you can edit it in the config file.
+If you want another one, put it in `/assets/img` as well.
 > ⚠️ It's a bit hacking the css in the `post.html`
