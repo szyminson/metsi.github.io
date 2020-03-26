@@ -2,6 +2,10 @@ xehivs: # author-id
   name: "Paweł Ksieniewicz"
   avatar: "https://www.kssk.pwr.edu.pl/system/people/avatars/000/000/002/medium/pawel_ksieniewicz.jpg?1505337092"
   url: "https://www.kssk.pwr.edu.pl/ksieniewicz"
+tibetansandfox: # author-id
+  name: "Paweł Zyblewski"
+  avatar: "https://www.kssk.pwr.edu.pl/system/people/avatars/000/000/064/medium/pawel_zyblewski.jpg?1538418022"
+  url: "https://www.kssk.pwr.edu.pl/people/pzyblewski"
 unknown:
   name: Unknown
   avatar:
