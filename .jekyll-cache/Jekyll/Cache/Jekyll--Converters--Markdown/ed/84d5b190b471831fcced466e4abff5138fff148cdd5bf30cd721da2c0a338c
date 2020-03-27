@@ -1,4 +1,4 @@
-I"{<p>This is a photo gallery made from the static files in the <code class="highlighter-rouge">assets/img/pexels</code> folder.
+I"ƒ<p>This is a photo gallery made from the static files in the <code class="highlighter-rouge">assets/img/pexels</code> folder.
 I wanted to create automatically a simple gallery from a folder without having to create a markdown page as you would for the portfolio.</p>
 
 <style>
@@ -400,6 +400,10 @@ html { overflow-y: scroll; }
     
         <img src="/assets/img/pexels/triangular.webp" alt="" class="grid-item" style="padding: 0;" />
       
+  
+
+  
+
   
 
   
