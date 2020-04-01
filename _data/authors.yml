@@ -6,6 +6,10 @@ tibetansandfox: # author-id
   name: "Paweł Zyblewski"
   avatar: "https://www.kssk.pwr.edu.pl/system/people/avatars/000/000/064/medium/pawel_zyblewski.jpg?1538418022"
   url: "https://www.kssk.pwr.edu.pl/people/pzyblewski"
+JakubKlik:
+  name: "Jakub Klikowski"
+  avatar: https://www.kssk.pwr.edu.pl/system/people/avatars/000/000/061/medium/avatar5.jpg?1538416361
+  url: https://www.kssk.pwr.edu.pl/people/jklikowski
 unknown:
   name: Unknown
   avatar:

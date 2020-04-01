@@ -1,0 +1,178 @@
+I"X<p>Przyszła środa, a więc czas na pierwszy zbiór przykładów. Zaczniemy najprościej jak to możliwe. Wygenerujemy kilka syntetycznych zbiorów danych, zapisując je później do plików CSV.</p>
+
+<!--more-->
+
+<h2 id="syntetyczne-zbiory-danych">Syntetyczne zbiory danych</h2>
+
+<p>Co do zasady jest tak, że w prawdziwych badaniach naukowych (takich poważnych, które podobno będzie ktoś czytać) nie powinniśmy raczej korzystać ze zbiorów syntetycznych – tj. wygenerowanych przez algorytm prób wzorców, które nie przedstawiają żadnego prawdziwego problemu.</p>
+
+<p>Mimo tego, okazują się bardzo przydatne. Pozwalają nam łatwo i szybko uzyskać wiele jednocześnie różnych i powtarzalnych (kochajmy <code class="highlighter-rouge">random_state</code>) prób problemu, które spełniają postawione przez nas wymagania. Przykładowo, możemy wygenerować na raz dziesięć różniących się od siebie zbiorów danych, z których każdy będzie mieć dokładnie trzydzieści obiektów (mała liczba wzorców) mających po tysiąc atrybutów (wysoka wymiarowość problemu).</p>
+
+<p>Duża część pracy badawczej, szczególnie na początku każdych badań, to budowanie prototypów – pierwszych podejść do problemów, które powinniśmy być w stanie szybko przetestować, żeby wcześnie wyłapać błędy programistyczne i koncepcyjne wymyślonej przez nas metody. Dzięki temu znacznie szybciej uda się przejść z etapu prototypowania do konstrukcji gotowego już algorytmu, który oczywiście na koniec przetestujemy już na zbiorach rzeczywistych.</p>
+
+<h3 id="generowanie-zbiorów-syntetycznych">Generowanie zbiorów syntetycznych</h3>
+
+<p>Dosyć przekonywania, że to przydatne, przejdźmy do przykładu.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn</span> <span class="kn">import</span> <span class="n">datasets</span>
+<span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">make_classification</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>W pierwszej linijce przykładu, z biblioteki <a href="https://scikit-learn.org/stable/">scikit-learn</a> importujemy moduł <a href="https://scikit-learn.org/stable/datasets/index.html">datasets</a>, odpowiadający m.in. za wczytywanie kilku standardowych zbiorów danych (niektóre mają po sto lat, więc przez jakiś czas nie będziemy się nimi raczej przejmować) i właśnie za generowanie zbiorów syntetycznych. Służy do tego funkcja <a href="https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_classification.html"><code class="highlighter-rouge">make_classification()</code></a>, którą wywołaliśmy na końcu tego krótkiego przykładu. Zwraca ona krotkę <code class="highlighter-rouge">(X, y)</code>, której pierwszy element to – zgodnie z oznaczeniami, które już raczej znamy – <em>zbiór danych</em>, a drugi jest <em>zbiorem etykiet</em>. Podejrzyjmy jakiej wielkości struktury są generowane przez nią domyślnie</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</code></pre></div></div>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; (100, 20) (100,)
+</code></pre></div></div>
+
+<p>W zbiorze danych (macierz <code class="highlighter-rouge">X</code>) znajduje się sto wierszy po dwadzieścia elementów. Oznacza to, że wygenerowaliśmy sto wzorców, każdy po dwadzieścia atrybutów. W zbiorze etykiet znajdują się (szokujące) etykiety dla każdego ze wzorców.</p>
+
+<h3 id="argumenty-funkcji-make_classification">Argumenty funkcji <code class="highlighter-rouge">make_classification()</code></h3>
+
+<p>Oczywiście, każdy z tych parametrów możemy kontrolować. Przykładowo, wygenerujmy zbiór danych zawierający tysiąc ośmiowymiarowych wzorców.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">make_classification</span><span class="p">(</span><span class="n">n_samples</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">n_features</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</code></pre></div></div>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; (1000, 8) (1000,)
+</code></pre></div></div>
+
+<p>Kolejne parametry (<code class="highlighter-rouge">n_samples</code>, <code class="highlighter-rouge">n_features</code>) przekazujemy jako argumenty funkcji. Zaimplementowana w niej metoda (oryginalnie służąca do generowania <a href="http://clopinet.com/isabelle/Projects/NIPS2003/Slides/NIPS2003-Datasets.pdf">zbioru Madelon</a>  i opracowana w 2003. roku przez Panią <a href="http://clopinet.com/isabelle/">Isabelle Guyon</a>) przyjmuje wiele argumentów, ale wymienimy sobie z nich tylko te, które okażą nam się najbardziej przydatne w eksperymentach na potrzeby laboratorium i projektu (jeśli kiedykolwiek jeszcze się na nich spotkamy):</p>
+
+<ul>
+  <li><code class="highlighter-rouge">n_samples</code> — liczba generowanych wzorców (domyślnie 100).</li>
+  <li><code class="highlighter-rouge">n_features</code> — liczba atrybutów zbioru (domyślnie 20).</li>
+  <li><code class="highlighter-rouge">n_classes</code> — liczba klas problemu (domyślnie 2, a więc problem binarny).</li>
+  <li><code class="highlighter-rouge">n_clusters_per_class</code> — liczba centroidów dla każdej klasy, a więc liczba skupisk każdej z klas problemu (domyślnie 2).</li>
+  <li><code class="highlighter-rouge">flip_y</code> — poziom szumu, a więc liczba etykiet, które celowo mają posiadać błędne przypisanie (domyślnie 0.01).</li>
+  <li><code class="highlighter-rouge">random_state</code> — ziarno losowości, które pozwala na wygenerowanie dokładnie tego samego zbioru w każdym powtórzeniu skryptu (domyślnie None, czyli losowe ziarno losowości).</li>
+</ul>
+
+<p>Poza tymi podstawowymi własnościami zbioru danych, na początek warto jeszcze dowiedzieć się jak sterować rodzajami generowanych atrybutów. W wypadku tego generatora wszystkie cechy będą ilościowymi, ale możemy modyfikować charakterystykę ich przydatności w budowie modelu. Istotne argumenty w tym wypadku to:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">n_informative</code> — liczba atrybutów informatywnych, a więc tych, które faktycznie zawierają informacje przydatne dla klasyfikacji, a nie jedynie szum (domyślnie 2).</li>
+  <li><code class="highlighter-rouge">n_redundant</code> — liczba atrybutów nadmiarowych, będących kombinacjami cech informatywnych (domyślnie 2).</li>
+  <li><code class="highlighter-rouge">n_repeated</code> — liczba atrybutów powtórzonych, czyli zduplikowanych kolumn, losowo wybranych z informatywnych i redundantnych (domyślnie 2).</li>
+</ul>
+
+<p>Domyślnie zatem generowany jest niepowtarzalny (brak ziarna losowości) binarny problem, który składa się ze stu wzorców, a jedynie sześć z jego dwudziestu atrybutów zawiera informacje potencjalnie przydatne (dwa informatywne, dwa to kombinacje informatywnych i dwa powtarzają losowe z czterech poprzednich), a reszta składa się wyłącznie z szumu.</p>
+
+<h3 id="wymyślamy-problem">Wymyślamy problem</h3>
+
+<p>Uzbrojeni w wiedzę o parametrach <code class="highlighter-rouge">make_classification()</code> możemy wymyślić sobie problem. Niech będzie to odtwarzalny (ziarno 1410), dwuwymiarowy zbiór danych, w którym jedynie jeden atrybut będzie informatywny (w drugim znajdzie się szum) i składa się ze stu wzorców o poziomie szumu wynoszącym pięć procent dla problemu binarnego.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">make_classification</span><span class="p">(</span>
+    <span class="n">n_samples</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">n_features</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">n_informative</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">n_repeated</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">n_redundant</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">flip_y</span><span class="o">=</span><span class="mf">.05</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="o">=</span><span class="mi">1410</span><span class="p">,</span>
+    <span class="n">n_clusters_per_class</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>Dwuwymiarowy zbiór wygenerowaliśmy po to, żeby móc wygenerować jego <em>scatterplot</em>. Kolejno, importujemy bibliotekę <code class="highlighter-rouge">matplotlib</code>, przygotowujemy pustą ilustrację o wymiarach 5 na 2.5 cala, rysujemy <em>scatterplot</em> (podając osobno kolumny z wymiarami i określając kolor – <code class="highlighter-rouge">c</code> – przez wygenerowane etykiety), opisujemy osi i zapisujemy plik PNG.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mf">2.5</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span><span class="mi">0</span><span class="p">],</span> <span class="n">X</span><span class="p">[:,</span><span class="mi">1</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'bwr'</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">"$x^1$"</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">"$x^2$"</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">'sroda1.png'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p><img src="/examples/sroda1.png" alt="" /></p>
+
+<p>Jak widać na załączonym obrazku, pierwszy atrybut pozwala na rozróżnienie klas, a więc jest informatywny a drugi zawiera wyłącznie szum. Dodatkowo, w obu skupiskach widać pojedyncze obiekty o oryginalnie błędnej etykiecie, w sumie składające się na dokładnie pięć obiektów, a więc pięć procent z wygenerowanej setki obiektów.</p>
+
+<h3 id="zapisujemy-problem">Zapisujemy problem</h3>
+
+<p>Na koniec powtórzymy sobie coś, co pokazywałem już Państwu na początku drugiego wykładu. Zbiory danych bardzo często udostępniane są jako pliki CSV. W razie gdyby ktoś nie znał tego formatu, są to <em>bardzo proste</em> pliki tekstowe reprezentujące tablice, w których każdy wiersz opisuje pojedynczy rekord (w naszym wypadku wzorzec), a każdy atrybut oddzielamy od siebie separatorem w postaci przecinka.</p>
+
+<blockquote>
+  <p>Dodatkowym wymaganiem o którym często się zapomina jest zapewnienie w takim pliku, aby każdy wiersz miał dokładnie tyle samo elementów (a więc i tyle samo separatorów). Odmianą tego formatu jest też TSV (tab-separated values), gdzie wartości oddzielamy znakiem tabulacji. Jeśli się uprzemy, możemy wartości oddzielać dowolnym wybranym przez nas separatorem, ale nie szarżujmy, żeby na przykład używać gwiazdki czy wykrzyknika. Ani nikt tego nie zrozumie, ani na nic się to nikomu nie przyda.</p>
+</blockquote>
+
+<p>W pierwszej kolejności powinniśmy połączyć ze sobą zbiór danych i zbiór etykiet, dokładając <code class="highlighter-rouge">y</code> jako dodatkową, ostatnią kolumnę macierzy <code class="highlighter-rouge">X</code>. Uznanie zbioru etykiet za ostatnią kolumnę zbioru w formie serializowanej jest czysto umowne, ale możemy założyć, że to wygodne rozwiązanie.</p>
+
+<p>Przyda nam się tutaj <code class="highlighter-rouge">numpy</code> i jej wbudowana funkcja <a href="https://docs.scipy.org/doc/numpy/reference/generated/numpy.concatenate.html"><code class="highlighter-rouge">concatenate()</code></a>. Jak możemy przeczytać w dokumentacji, jako pierwszy atrybut (nienazwany i pozycyjny) przyjmuje “<em>sekwencję lub tablicę tablic o tym samym kształcie</em>”. Sekwencję zrozumiemy jako krotkę <code class="highlighter-rouge">(X, y)</code>, mimo, że moglibyśmy spokojnie przekazać tam także tablicę.</p>
+
+<p>Przekazanie jej w takiej najprostszej postaci zakończy się jednak błędem wynikającym z tego, że nie zapewniliśmy naszym tablicom numpy wspólnego kształtu. Powinniśmy rozumieć go jako:</p>
+
+<ul>
+  <li>tą samą liczbą wymiarów (długość wektora zwracaną przez atrybut <code class="highlighter-rouge">shape</code> tablicy),</li>
+  <li>tą samą wielkością we wszystkich wymiarach poza jednym.</li>
+</ul>
+
+<p>Nasz ostatni wygenerowany zbiór danych ma wymiary <code class="highlighter-rouge">(100, 2)</code>, a zbiór etykiet <code class="highlighter-rouge">(100)</code>, a więc nie spełniamy pierwszego z tych dwóch warunków. Możemy to nadrobić adresując <code class="highlighter-rouge">y</code> w sposób, który wygeneruje na jego końcu dodatkowy wymiar i zacznie traktować nie jako wektor, a jako macierz z pojedynczą kolumną. Możemy osiągnąć to przez wywołanie <code class="highlighter-rouge">y[:, np.newaxis]</code>.</p>
+
+<p>Drugim niezbędnym nam atrybutem funkcji <code class="highlighter-rouge">concatenate()</code> jest <code class="highlighter-rouge">axis</code>, czyli oś, w której planujemy złączyć ze sobą przekazane tablice. Powinniśmy wskazać nim w którym wymiarze (której osi) tablice mają różną wielkość. W naszym wypadku jest to drugi parametr, więc licząc od zera powinniśmy przekazać tam wartość <code class="highlighter-rouge">1</code>. Poprawne złączenie możemy zatem zapisać jak poniżej:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Pojedynczą macierz możemy już bez trudu zapisać w pliku tekstowym o formacie CSV, znów korzystając z metody wbudowanej <code class="highlighter-rouge">numpy</code> <a href="https://docs.scipy.org/doc/numpy/reference/generated/numpy.savetxt.html"><code class="highlighter-rouge">savetxt()</code></a>.</p>
+
+<p>Ma ona dwa argumenty pozycyjne. W pierwszym podajemy łańcuch z nazwą pliku, w drugim tablicę, którą chcemy zapisać. Dodatkowo, jeśli chcemy spełnić wymagania formatu CSV, powinniśmy również zmienić domyślny separator na przecinek.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="s">"dataset.csv"</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">","</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>To niby wystarczy, ale jeśli podejrzymy zawartość pliku, zobaczymy, że nie wygląda najpiękniej.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>-1.060890925868820389e+00,2.455805509796364028e+00,0.000000000000000000e+00
+-6.853148372231210317e-01,-1.500489680108889390e+00,0.000000000000000000e+00
+7.775378070067257008e-01,1.330505069088626868e+00,1.000000000000000000e+00
+6.933842893245101280e-01,7.217146432694194758e-01,1.000000000000000000e+00
+-2.715820952605125793e-01,7.934501868603156538e-01,1.000000000000000000e+00
+</code></pre></div></div>
+
+<p>Jeśli ktoś jest miłośnikiem notacji naukowej, oczywiście może zostawić to w takiej formie, ale należy szczerze przyznać, że zapis etykiety, która w końcu jest liczbą całkowitą z przepastnego, dyskretnego zbioru zawierającego jedynie zero i jedynkę, jako liczbę w notacji matematycznej z dokładnością do osiemnastu miejsce po przecinku, jest cokolwiek karkołomne. Możemy naprawić to przez ręczne podanie formatu liczb. Nie będę tego dokładnie teraz wyjaśniać, ale proszę uwierzyć, działa.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span>
+    <span class="s">"dataset.csv"</span><span class="p">,</span>
+    <span class="n">dataset</span><span class="p">,</span>
+    <span class="n">delimiter</span><span class="o">=</span><span class="s">","</span><span class="p">,</span>
+    <span class="n">fmt</span><span class="o">=</span><span class="p">[</span><span class="s">"</span><span class="si">%.5</span><span class="s">f"</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])]</span> <span class="o">+</span> <span class="p">[</span><span class="s">"</span><span class="si">%</span><span class="s">i"</span><span class="p">],</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>-1.06089,2.45581,0
+-0.68531,-1.50049,0
+0.77754,1.33051,1
+0.69338,0.72171,1
+-0.27158,0.79345,1
+</code></pre></div></div>
+
+<p>Od razu lepiej, prawda?</p>
+
+<h3 id="wracamy-do-problemu">Wracamy do problemu</h3>
+
+<p>No dobrze, to na koniec zobaczmy, jak wczytywać pliki CSV do tablic <code class="highlighter-rouge">numpy</code>. Znów, mamy od tego funkcję wbudowaną, nazywaną <a href="https://docs.scipy.org/doc/numpy/reference/generated/numpy.genfromtxt.html"><code class="highlighter-rouge">genfromtxt()</code></a>. Wczytajmy zatem plik do zmiennej <code class="highlighter-rouge">dataset</code> (pamiętając o separatorze) i spójrzmy jak pięknie się wczytał.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">dataset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">"dataset.csv"</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">","</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+</code></pre></div></div>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; [[-1.06089  2.45581  0.     ]
+&gt;&gt;  [-0.68531 -1.50049  0.     ]
+&gt;&gt;  [ 0.77754  1.33051  1.     ]
+&gt;&gt;  [ 0.69338  0.72171  1.     ]
+&gt;&gt;  [-0.27158  0.79345  1.     ]
+...
+</code></pre></div></div>
+
+<p>Skoro już się wczytał, to podzielmy go jeszcze na <code class="highlighter-rouge">X</code> i <code class="highlighter-rouge">y</code>, do pierwszego przypisując wszystkie kolumny poza ostanią, a do drugiego jedynie ostatnią. Skoro etykiety są i tak liczbami całkowitymi, zrzutujmy ją przy okazji na całkowitą.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">X</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Pięknie. Potrafimy już zrealizować tak zaawansowane zadania jak wymyślenie problemu i zapisanie go na później, żeby zawsze móc do niego wrócić. Wybornie.</p>
+
+<p>Do przeczytania w piątek!</p>
+:ET

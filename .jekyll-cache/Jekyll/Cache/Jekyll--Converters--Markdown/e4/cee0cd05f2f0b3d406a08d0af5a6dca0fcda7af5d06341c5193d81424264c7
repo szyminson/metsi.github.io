@@ -1,4 +1,4 @@
-I"dE<p>Nastał piątek, a zarazem także czas, aby uraczyć nasze oczy kolejnym zbiorem przykładów. Dzisiaj zbudujemy model klasyfikacji, dokonamy za jego pomocą predykcji oraz ocenimy, jak dobrze nasz klasyfikator radzi sobie z zadanym problemem. Nie traćmy więc czasu i zabierzmy się do pracy!</p>
+I"�E<p>Nastał piątek, a zarazem także czas, aby uraczyć nasze oczy kolejnym zbiorem przykładów. Dzisiaj zbudujemy model klasyfikacji, dokonamy za jego pomocą predykcji oraz ocenimy, jak dobrze nasz klasyfikator radzi sobie z zadanym problemem. Nie traćmy więc czasu i zabierzmy się do pracy!</p>
 
 <!--more-->
 
@@ -6,7 +6,7 @@
 
 <h3 id="wczytanie-wcześniej-wygenerowanego-zbioru-danych">Wczytanie wcześniej wygenerowanego zbioru danych</h3>
 
-<p>We wcześniejszych przykładach nauczyliśmy się generować syntetyczny zbiór danych, zapisywać go do pliku CSV oraz takowe pliki wczytywać. Zacznijmy więc dzisiejsze zadanie od wczytania wcześniej przygotowanego zestawu danych, który znajduje się w pliku <code class="highlighter-rouge">dataset.csv</code> (wygodnie dostępnym do pobrania <a href="examples/dataset.csv">tutaj</a>).</p>
+<p>We wcześniejszych przykładach nauczyliśmy się generować syntetyczny zbiór danych, zapisywać go do pliku CSV oraz takowe pliki wczytywać. Zacznijmy więc dzisiejsze zadanie od wczytania wcześniej przygotowanego zestawu danych, który znajduje się w pliku <code class="highlighter-rouge">dataset.csv</code> (wygodnie dostępnym do pobrania <a href="https://github.com/metsi/metsi.github.io/blob/master/examples/dataset.csv">tutaj</a>).</p>
 
 <p>Zestaw danych został wygenerowany przy pomocy dobrze nam znanego już kodu:</p>
 

@@ -1,0 +1,211 @@
+I"�}<p>Kolejna środa nadeszła, a to oznacza nową porcję przykładów. Dzisiaj poznamy różne sposoby walidacji krzyżowej. Nie przedłużając wstępu zapraszam do lektury.</p>
+
+<!--more-->
+
+<h2 id="prosta-walidacja">Prosta walidacja</h2>
+
+<h3 id="dane">Dane</h3>
+
+<p>Z poprzednich przykładów na pewno już wiemy jak wygenerować lub wczytać dane. Dla szybkiego przypomnienia poniżej fragment kodu generowania danych. Wprowadzona jest drobna zmiana i dodajemy parametr <code class="highlighter-rouge">weights</code>, o którym dowiemy się więcej w dalszej części.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.datasets</span> <span class="kn">import</span> <span class="n">make_classification</span>
+<span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">make_classification</span><span class="p">(</span>
+    <span class="n">weights</span><span class="o">=</span><span class="p">[</span><span class="mf">0.8</span><span class="p">,</span><span class="mf">0.2</span><span class="p">],</span>
+    <span class="n">n_samples</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">n_features</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">n_informative</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">n_repeated</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">n_redundant</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">flip_y</span><span class="o">=</span><span class="mf">.05</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">,</span>
+    <span class="n">n_clusters_per_class</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="podział-danych">Podział danych</h3>
+
+<p>Wykonanie walidacji modelu wymaga od nas podziału danych na <em>zbiór uczący</em> i <em>zbiór testowy</em>. Trenowanie i testowanie modelu na takich samym danych jest bez sensu, a wyniki uzyskane w ten sposób nie pozwolą nam określić jakości naszego klasyfikatora. Najprostszym przykładem jest skorzystanie z funkcji <code class="highlighter-rouge">train_test_split()</code>, która pozwoli na wykonanie pojedynczego podziału naszego zbioru danych. Parametr <code class="highlighter-rouge">test_size</code> ustawiony na wartość <code class="highlighter-rouge">.30</code> oznacza, że 30% losowo wybranych próbek ze zbioru zostanie przydzielona do  <em>zbioru testowego</em> , a 70% do  <em>zbioru uczącego</em>. Pamiętamy o <code class="highlighter-rouge">random_state</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">train_test_split</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">train_test_split</span><span class="p">(</span>
+    <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span>
+    <span class="n">test_size</span><span class="o">=</span><span class="mf">.30</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="budowa--i-testowanie-modelu">Budowa  i testowanie modelu</h3>
+
+<p>Posiadając <em>zbiór uczący</em> możemy zbudować model. Klasyfikator wykorzystany do tego to znany z poprzedniego przykładu <em>Naiwny klasyfikator bayesowski</em> oparty na rozkładzie normalnym zwanym też rozkładem Gaussa. Zrobimy to za pomocą metody <code class="highlighter-rouge">fit()</code>, która jako argumenty przyjmuje atrybuty <code class="highlighter-rouge">X_train</code> i etykiety <code class="highlighter-rouge">y_train</code> zbioru uczącego. Kolejnym krokiem jest dokonanie predykcji na <em>zbiorze testowym</em>. Wykonuje się to za pomocą metody <code class="highlighter-rouge">predict()</code>, która jako argument przyjmuje atrybuty uczącego zbioru danych <code class="highlighter-rouge">X_test</code>. Zwracany jest zbiór przewidywanych etykiet <code class="highlighter-rouge">predict</code> , który jest odpowiedzią naszego wcześniej wyuczonego modelu. Ostatnim etapem jest wyliczenie jakości na podstawie wybranej metryki, w tym wypadku dokładność <code class="highlighter-rouge">accuracy_score</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.naive_bayes</span> <span class="kn">import</span> <span class="n">GaussianNB</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">accuracy_score</span>
+<span class="n">clf</span> <span class="o">=</span> <span class="n">GaussianNB</span><span class="p">()</span>
+<span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+<span class="n">predict</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+<span class="n">score</span> <span class="o">=</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">predict</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Accuracy score:</span><span class="se">\n</span><span class="si">%.2</span><span class="s">f"</span> <span class="o">%</span> <span class="n">score</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Jakość jaką otrzymaliśmy jest dość wysoka, ale nie oznacza to, że jest to wynik nas satysfakcjonujący.</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Accuracy score: 0.900
+</code></pre></div></div>
+
+<h2 id="walidacja-krzyżowa">Walidacja krzyżowa</h2>
+
+<h3 id="k-krotna-walidacja-krzyżowa">K-krotna walidacja krzyżowa</h3>
+
+<p>Przechodzimy teraz do dużo lepszej metody walidacji - k-krotnej walidacji krzyżowej. Pozwoli to nam na wyznaczenie jakości modelu w najczęściej stosowany sposób. Główną ideą jest podział naszego zbioru na <em>K</em> równych części. Następnie kolejno każda z tych części używana jest jako <em>zbiór testowy</em>, a pozostałe jako <em>zbiór uczący</em>. Proces ten wykonywany jest <em>K</em> razy i za każdym razem budujemy nowy model od nowa. Następnie uzyskane rezultaty (np. dokładność) są uśrednianie lub w jakiś inny sposób agregowane w jeden wynik. Poniżej wizualizacja podziału dla 5-krotnej walidacji krzyżowej. Całość to w pewnym uproszczeniu nasz zbiór danych podzielony na 5 losowych części. Każdy zielony kwadracik oznacza część wybraną jako <em>podzbiór testowy</em> , a żółte oznaczają <em>podzbiór uczący</em>. W sumie mamy 5 iteracji.</p>
+
+<p><img src="/examples/5kfold.png" alt="5kfold" /></p>
+
+<p>W praktyce wygląda to w następujący sposób. Najpierw po zaimportowaniu odpowiednich składników tworzymy obiekt <code class="highlighter-rouge">kf</code> klasy <code class="highlighter-rouge">KFold</code> z ustalonym parametrem liczby części <code class="highlighter-rouge">n_splits</code>. W tym wypadku ustalamy wartość 5. Pamiętajmy jeszcze o parametrze <code class="highlighter-rouge">shuffle</code> ustawionym na wartość <code class="highlighter-rouge">True</code> co oznacza, że dane zostaną przetasowane przed podziałem oraz o ustawieniu parametru <code class="highlighter-rouge">random_state</code>. Następnie tworzymy sobie pustą listę <code class="highlighter-rouge">scores</code>, na której będziemy później umieszczać uzyskaną dokładność na poszczególnych <em>podzbiorach testowych</em>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">KFold</span>
+<span class="n">kf</span> <span class="o">=</span> <span class="n">KFold</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+</code></pre></div></div>
+
+<p>W kolejnym kroku wykorzystujemy metodę <code class="highlighter-rouge">split</code> z argumentem <code class="highlighter-rouge">X</code>, która zwróci nam numery indeksów, próbek wybranych i podzielonych na <em>podzbiory uczące</em> oraz <em>podzbiory testowe</em>. Odpowiednio <code class="highlighter-rouge">train_index</code> i <code class="highlighter-rouge">test_index</code>. Mechanizm pętli pozwala nam na iteracyjne wybieranie poszczególnych podziałów. Wewnątrz pętli dokonujemy już faktycznego podziału na atrybuty uczące <code class="highlighter-rouge">X_train = X[train_index]</code> i testowe <code class="highlighter-rouge">X-test = X[test_index]</code>. To samo dotyczy etykiet <code class="highlighter-rouge">y_train, y_test = y[train_index], y[test_index]</code>. Mając już tak podzielony zbiór danych możemy zbudować model, dokonać predykcji i obliczyć dokładność klasyfikacji, a uzyskany wynik zamieścić na wcześniej przygotowanej liście <code class="highlighter-rouge">scores</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">train_index</span><span class="p">,</span> <span class="n">test_index</span> <span class="ow">in</span> <span class="n">kf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+    <span class="n">predict</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">predict</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>W ostatnim kroku uśredniamy <code class="highlighter-rouge">np.mean()</code> uzyskane wyniki oraz liczymy standardowe odchylenie <code class="highlighter-rouge">np.std()</code>. Dokonujemy tego za pomocą funkcji zawartych w bibliotece <code class="highlighter-rouge">numpy</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="n">mean_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="n">std_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">mean_score</span><span class="p">,</span> <span class="n">std_score</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Uzyskany przez nas wynik to:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Accuracy score: 0.880 (0.051)
+</code></pre></div></div>
+
+<p><img src="/examples/cv.jpeg" alt="cv" /></p>
+
+<ul>
+  <li>
+    <p>Czy to oznacza, że pogorszyliśmy jakość naszego modelu?</p>
+  </li>
+  <li>
+    <p>Stanowcze nie!</p>
+  </li>
+</ul>
+
+<p>Na pewno poprawiliśmy jakość naszego badania. Może się też zdarzyć, że zmierzona dokładność ulegnie zmianie, ale nie zawsze będzie się pogarszać.</p>
+
+<h3 id="stratyfikowana-walidacja-krzyżowa">Stratyfikowana walidacja krzyżowa</h3>
+
+<p>Niejednokrotnie możemy się spotkać z danymi gdzie liczba obiektów danej klasy jest liczniejsza od pozostałych klas. W przypadku niewielkich różnic nie ma to dużego wpływu na wynik i przeprowadzanie badania. Jednak duże różnice stają się pewnym utrudnieniem. Nazywane jest to <em>niezbalansowaniem danych</em>. Wiąże się to z zastosowaniem odpowiedniego podejścia podczas klasyfikacji i przeprowadzania eksperymentów. Za pomocą prostej komendy możemy wypisać sobie wszystkie etykiety:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Co powoduje wypisanie:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 1 0 0 0 0 1 1 0 0 1 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 1 0 0 0 1 0 0 0 1 1 0 0 0 1 0 0 0 0 0 1 0 1 0 0 0 1 0 0 0 0 1 0 0
+ 0 1 0 1 1 0 1 0 1 0 1 0 1 0 0 0 0 0 0 0 1 0 1 0 0 0]
+</code></pre></div></div>
+
+<p>Na pierwszy rzut oka wygląda, że jest więcej etykiet klasy “0” niż klasy “1”. Możemy sobie oszczędzić ręcznego liczenia i wykorzystać jedną z funkcji biblioteki <code class="highlighter-rouge">numpy</code> do sprawdzenia ile dokładnie jest poszczególnych wartości.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">return_counts</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Wynikiem czego jest:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(array([0, 1]), array([76, 24]))
+</code></pre></div></div>
+
+<p>Oznacza to, że w naszym zbiorze danych klas oznaczonych etykietą “0” jest dokładnie 76, a oznaczonych etykietą “1” jest 24. Nasze dane również są niezbalansowane. Ten współczynnik pomiędzy liczbą etykiet klas nazywamy <em>poziomem niezbalansowania</em>. Odpowiedzialny za to jest parametr generatora <code class="highlighter-rouge">weights=[0.8,0.2]</code> , za pomocą którego ustalamy jaki będzie udział poszczególnych klas w generowanych danych. Walidacja krzyżowa dokonuje losowego podziału na pozdbiory, co może zaburzać ten rozkład. W tym momencie bardzo przydatna okazuje stratyfikowana walidacja krzyżowa, która podczas podziału na podzbiory zachowuje oryginalny lub zbliżony do oryginalnego <em>poziom niezbalansowania</em>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">StratifiedKFold</span>
+<span class="n">skf</span> <span class="o">=</span> <span class="n">StratifiedKFold</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="k">for</span> <span class="n">train_index</span><span class="p">,</span> <span class="n">test_index</span> <span class="ow">in</span> <span class="n">skf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">y</span><span class="p">):</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+    <span class="n">predict</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">predict</span><span class="p">))</span>
+
+<span class="n">mean_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="n">std_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">mean_score</span><span class="p">,</span> <span class="n">std_score</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Cała procedura odbywa się w podobny sposób jak przy zwykłej k-krotnej walidacji krzyżowej. Wykorzystujemy tylko inną klasę w tym wypadku <code class="highlighter-rouge">StratifiedKFold</code> oraz w metodzie <code class="highlighter-rouge">split</code> podajemy etykiety danych <code class="highlighter-rouge">y</code>, tak żeby walidator wyciągnął informacje o <em>poziomie niezbalansowania</em> klas. Na koniec sprawdzamy dokładność.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Accuracy score: 0.860 (0.066)
+</code></pre></div></div>
+
+<p>Wynik niższy, ale badania jeszcze bardziej zyskały na jakości, a my jesteśmy bogatsi o nową wiedzę.</p>
+
+<h3 id="wielokrotna-walidacja-krzyżowa">Wielokrotna walidacja krzyżowa</h3>
+
+<p>Jeszcze innym podejściem jest wielokrotna walidacja krzyżowa. Głównie założenie tego sposobu jest takie, że dokonujemy kilku powtórzeń podziału na podzbiory. Innymi słowy jest to pewne zautomatyzowanie kilku krotnego procesu walidacji krzyżowej i obliczanie uśrednionej wartości z tych wszystkich podzbiorów. Praktycznie kod programu wygląda prawie identycznie jak w przypadku normalnej walidacji, różnica jest tylko w użyciu innej klasy <code class="highlighter-rouge">RepeatedKFold</code> oraz ustaleniu dodatkowego parametru <code class="highlighter-rouge">n_repeats</code>. W poniższym przykładzie wykonamy 5-krotną walidację krzyżową z 10-cioma powtórzeniami. W pewnym uproszeniu można powiedzieć, że robimy walidację krzyżową 10x5 (dziesięć na pięć).</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">RepeatedKFold</span>
+<span class="n">rkf</span> <span class="o">=</span> <span class="n">RepeatedKFold</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">n_repeats</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="k">for</span> <span class="n">train_index</span><span class="p">,</span> <span class="n">test_index</span> <span class="ow">in</span> <span class="n">rkf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+    <span class="n">predict</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">predict</span><span class="p">))</span>
+
+<span class="n">mean_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="n">std_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">mean_score</span><span class="p">,</span> <span class="n">std_score</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Istnieje również stratyfikowana wielokrotna walidacja krzyżowa. Poniżej przykładowy kod programu.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">RepeatedStratifiedKFold</span>
+<span class="n">rskf</span> <span class="o">=</span> <span class="n">RepeatedStratifiedKFold</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">n_repeats</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="k">for</span> <span class="n">train_index</span><span class="p">,</span> <span class="n">test_index</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">y</span><span class="p">):</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+    <span class="n">predict</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">predict</span><span class="p">))</span>
+
+<span class="n">mean_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="n">std_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">mean_score</span><span class="p">,</span> <span class="n">std_score</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h3 id="leave-one-out">Leave-one-out</h3>
+
+<p>Ostatnim już dzisiaj przykładem walidacji krzyżowej jest tak leave-one-out. Jest to bardzo szczególna odmiana k-krotnej walidacji krzyżowej, gdzie zbiór danych jest dzielona na podzbiory, zawierające tylko po jednym obiekcie danych. Podobnie jak w poprzednich walidacjach krzyżowych za każdym razem jeden podzbiór (tutaj jeden obiekt) używany jest do testowania, a pozostałe do uczenia. Tego typu metoda stosowana jest najczęściej dla małych zbiorów danych. Od praktycznej strony zastosowanie odbywa się w dość analogiczny sposób jak pozostałe dzisiejsze przykłady.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">LeaveOneOut</span>
+<span class="n">loo</span> <span class="o">=</span> <span class="n">LeaveOneOut</span><span class="p">()</span>
+
+<span class="k">for</span> <span class="n">train_index</span><span class="p">,</span> <span class="n">test_index</span> <span class="ow">in</span> <span class="n">loo</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">train_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">test_index</span><span class="p">]</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+    <span class="n">predict</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">predict</span><span class="p">))</span>
+<span class="n">mean_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="n">std_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">mean_score</span><span class="p">,</span> <span class="n">std_score</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>To by było dzisiaj na tyle. Pełni nowej wiedzy możemy teraz z czystym sumieniem odejść od komputera i w tak piękną pogodę z pełną odpowiedzialnością za los naszego świata posiedzieć sobie w domu.</p>
+:ET
