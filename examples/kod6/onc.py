@@ -38,9 +38,8 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
             self.optimize_ = True
             while self.optimize_:
                 # jezeli mamy outliery to je usuwamy, od 2 obiegu petli
-                if hasattr(self, 'outliers_'):
+                if hasattr(self, 'outliers_') and self.optimize == True:
                     X_class = np.delete(X_class, self.outliers_, axis=0)
-
                 # wyliczamy centroid klasy
                 class_centroid = np.sum(X_class, axis=0) / X_class.shape[0]
                 # liczymy dystanse wszystkich obiektow klasy od centroidu
