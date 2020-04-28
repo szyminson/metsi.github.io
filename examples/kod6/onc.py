@@ -1,7 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
-from sklearn.utils.multiclass import unique_labels
 from sklearn.neighbors import DistanceMetric
 import matplotlib.pyplot as plt
 
@@ -20,47 +19,56 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         # czy X i y maja wlasciwy ksztalt
         X, y = check_X_y(X, y)
         # przechowanie unikalnych klas problemu
-        self.classes_ = unique_labels(y)
+        self.classes_ = np.unique(y)
         # zapamietujemy X i y
         self.X_, self.y_ = X, y
-
         # przygotowujemy narzedzie do liczenia dystansow
         self.dm_ = DistanceMetric.get_metric(self.metric)
 
         # kontener na centroidy klas
         self.centroids_ = []
-        plt.scatter(self.X_[:, 0], self.X_[:, 1], c=y, cmap='bwr')
+        # plt.scatter(self.X_[:, 0], self.X_[:, 1], c=y, cmap='bwr')
+        # plt.savefig("cos")
         # dla kazdej klasy
         for cl in self.classes_:
             # wybieramy tylko instancje nalezace do danej klasy
             X_class = self.X_[self.y_ == cl]
 
-            # przynajmniej jeden obied petli
+            # przynajmniej jeden obieg petli
             while True:
                 # wyliczamy centroid klasy
                 class_centroid = np.mean(X_class, axis=0)
+                # liczymy odchylenie standardowe instancji klasy
+                std = np.std(X_class, axis=0)
+
+                # możliwie najdalej znajdująca się instancje
+                self.borderline_ = class_centroid + (self.sigma * std)
+
+                # maksymalny dopuszczalny dystans
+                accepted_distances = np.squeeze(self.dm_.pairwise(
+                    class_centroid.reshape(1, X_class.shape[1]), self.borderline_.reshape(1, X_class.shape[1])))
+
                 # liczymy dystanse wszystkich obiektow klasy od centroidu
                 distances = np.squeeze(self.dm_.pairwise(
                     class_centroid.reshape(1, X_class.shape[1]), X_class))
-                # liczymy odchylenie standardowe instancji klasy
-                std = np.std(X_class)
 
-                plt.scatter(class_centroid[0], class_centroid[1], c='black')
+                # plt.scatter(class_centroid[0], class_centroid[1], c='black')
+                # plt.savefig("cos")
 
                 # uznajemy za outliery te instancje, ktore znajduja sie od
                 # centroidu dalej niz 3 * std
-                self.outliers_ = np.squeeze(np.argwhere(distances > self.sigma * std))
-
+                self.outliers_mask_ = np.array(distances > accepted_distances)
                 # konczymy optymalizacje, jezeli nie mamy autlierow
                 # lub nie chcielismy w ogole z niej korzystac
-                if self.outliers_.size == 0 or self.optimize == False:
+                if np.sum(self.outliers_mask_) == 0 or self.optimize == False:
                     break
                 # w inym przypadku pozbywamy sie outlierow
                 else:
-                    plt.scatter(X_class[self.outliers_, 0], X_class[self.outliers_, 1], c='gray')
-                    X_class = np.delete(X_class, self.outliers_, axis=0)
+                    # plt.scatter(X_class[self.outliers_mask_, 0], X_class[self.outliers_mask_, 1], c='grey')
+                    # plt.savefig("cos")
+                    X_class = X_class[self.outliers_mask_ == False]
+
             # dodajemy wyliczony centroid do listy
-                plt.savefig("cos")
             self.centroids_.append(class_centroid)
         # zwracamy klasyfikator
         return self
@@ -72,8 +80,8 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         X = check_array(X)
 
         # liczymy dystanse instancji testowych od centroidow
-        distance_pred= self.dm_.pairwise(self.centroids_, X)
-        # uznajemy, ze instancje naleza do klsy, ktorej centroid znajduje
+        distance_pred = self.dm_.pairwise(self.centroids_, X)
+        # uznajemy, ze instancje naleza do klasy, ktorej centroid znajduje
         # sie blizej
         y_pred = np.argmin(distance_pred, axis=0)
         # zwracamy predykcje
