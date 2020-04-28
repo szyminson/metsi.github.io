@@ -34,10 +34,13 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
             # wybieramy tylko instancje nalezace do danej klasy
             X_class = self.X_[self.y_ == cl]
 
-            # przynajmniej jeden obieg petli
+            # petla
             while True:
                 # wyliczamy centroid klasy
                 class_centroid = np.mean(X_class, axis=0)
+                # jeżeli nie optymalizujemy to kończymy
+                if self.optimize == False:
+                    break
                 # liczymy odchylenie standardowe instancji klasy
                 std = np.std(X_class, axis=0)
 
@@ -58,9 +61,8 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
                 # uznajemy za outliery te instancje, ktore znajduja sie od
                 # centroidu dalej niz 3 * std
                 self.outliers_mask_ = np.array(distances > accepted_distances)
-                # konczymy optymalizacje, jezeli nie mamy autlierow
-                # lub nie chcielismy w ogole z niej korzystac
-                if np.sum(self.outliers_mask_) == 0 or self.optimize == False:
+                # konczymy optymalizacje, jezeli nie mamy outlierow
+                if np.sum(self.outliers_mask_) == 0:
                     break
                 # w inym przypadku pozbywamy sie outlierow
                 else:
