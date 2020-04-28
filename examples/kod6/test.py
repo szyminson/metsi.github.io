@@ -1,14 +1,15 @@
 import numpy as np
 from onc import OptimizedNearestCentroid
+from ooo import OOO
 from sklearn.naive_bayes import GaussianNB
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-# dataset = 'australian'
-# dataset = np.genfromtxt("../%s.csv" % (dataset), delimiter=",")
-# X = dataset[:, :-1]
-# y = dataset[:, -1].astype(int)
+dataset = 'australian'
+dataset = np.genfromtxt("../%s.csv" % (dataset), delimiter=",")
+X = dataset[:, :-1]
+y = dataset[:, -1].astype(int)
 
 X, y = make_classification(
     n_samples=400,
@@ -29,12 +30,16 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 clf = OptimizedNearestCentroid(metric='euclidean', optimize=False, sigma=3)
 clfo = OptimizedNearestCentroid(metric='euclidean', optimize=True, sigma=3)
+ooo = OOO(metric="euclidean", sigma=3)
 
 clf.fit(X_train, y_train)
 clfo.fit(X_train, y_train)
+ooo.fit(X_train, y_train)
 
 pred = clf.predict(X_test)
 predo = clfo.predict(X_test)
+predoo = ooo.predict(X_test)
 
 print("Zwykly:         ", accuracy_score(y_test, pred))
 print("Optymalizowany: ", accuracy_score(y_test, predo))
+print("OOO           : ", accuracy_score(y_test, predoo))

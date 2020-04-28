@@ -15,7 +15,6 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         self.metric = metric
         self.optimize = optimize
         self.sigma = sigma
-        self.dm = DistanceMetric.get_metric(self.metric)
 
     def fit(self, X, y):
         # czy X i y maja wlasciwy ksztalt
@@ -25,6 +24,9 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         # zapamietujemy X i y
         self.X_, self.y_ = X, y
 
+        # przygotowujemy narzedzie do liczenia dystansow
+        self.dm_ = DistanceMetric.get_metric(self.metric)
+
         # kontener na centroidy klas
         self.centroids_ = []
         plt.scatter(self.X_[:, 0], self.X_[:, 1], c=y, cmap='bwr')
@@ -32,19 +34,13 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         for cl in self.classes_:
             # wybieramy tylko instancje nalezace do danej klasy
             X_class = self.X_[self.y_ == cl]
+
             # przynajmniej jeden obied petli
-            self.optimize_ = True
-            while self.optimize_:
-                # jezeli mamy outliery to je usuwamy, od 2 obiegu petli
-                if hasattr(self, 'outliers_') and self.optimize == True:
-                    plt.scatter(X_class[self.outliers_, 0], X_class[self.outliers_, 1], c='gray')
-
-                    X_class = np.delete(X_class, self.outliers_, axis=0)
-
+            while True:
                 # wyliczamy centroid klasy
                 class_centroid = np.mean(X_class, axis=0)
                 # liczymy dystanse wszystkich obiektow klasy od centroidu
-                distances = np.squeeze(self.dm.pairwise(
+                distances = np.squeeze(self.dm_.pairwise(
                     class_centroid.reshape(1, X_class.shape[1]), X_class))
                 # liczymy odchylenie standardowe instancji klasy
                 std = np.std(X_class)
@@ -55,13 +51,16 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
                 # centroidu dalej niz 3 * std
                 self.outliers_ = np.squeeze(np.argwhere(distances > self.sigma * std))
 
-                plt.savefig("cos")
-
                 # konczymy optymalizacje, jezeli nie mamy autlierow
                 # lub nie chcielismy w ogole z niej korzystac
                 if self.outliers_.size == 0 or self.optimize == False:
-                    self.optimize_ = False
+                    break
+                # w inym przypadku pozbywamy sie outlierow
+                else:
+                    plt.scatter(X_class[self.outliers_, 0], X_class[self.outliers_, 1], c='gray')
+                    X_class = np.delete(X_class, self.outliers_, axis=0)
             # dodajemy wyliczony centroid do listy
+                plt.savefig("cos")
             self.centroids_.append(class_centroid)
         # zwracamy klasyfikator
         return self
@@ -73,7 +72,7 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         X = check_array(X)
 
         # liczymy dystanse instancji testowych od centroidow
-        distance_pred= self.dm.pairwise(self.centroids_, X)
+        distance_pred= self.dm_.pairwise(self.centroids_, X)
         # uznajemy, ze instancje naleza do klsy, ktorej centroid znajduje
         # sie blizej
         y_pred = np.argmin(distance_pred, axis=0)
