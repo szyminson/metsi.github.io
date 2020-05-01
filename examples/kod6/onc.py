@@ -29,7 +29,7 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         self.centroids_ = []
         # plt.scatter(self.X_[:, 0], self.X_[:, 1], c=y, cmap='bwr')
         # plt.tight_layout()
-        # plt.savefig("cos")
+        # plt.savefig("trzy")
         # dla kazdej klasy
         for cl in self.classes_:
             # wybieramy tylko instancje nalezace do danej klasy
@@ -56,8 +56,8 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
                 distances = np.squeeze(self.dm_.pairwise(
                     class_centroid.reshape(1, X_class.shape[1]), X_class))
 
-                # plt.scatter(class_centroid[0], class_centroid[1], c='black')
-                # plt.savefig("cos")
+                # plt.scatter(class_centroid[0], class_centroid[1], c='black', s=260)
+                # plt.savefig("trzy")
 
                 # uznajemy za outliery te instancje, ktore znajduja sie od
                 # centroidu dalej niz 3 * std
@@ -67,8 +67,8 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
                     break
                 # w inym przypadku pozbywamy sie outlierow
                 else:
-                    # plt.scatter(X_class[self.outliers_mask_, 0], X_class[self.outliers_mask_, 1], c='grey')
-                    # plt.savefig("cos")
+                    # plt.scatter(X_class[self.outliers_mask_, 0], X_class[self.outliers_mask_, 1], c='gray', s=100)
+                    # plt.savefig("trzy")
                     X_class = X_class[self.outliers_mask_ == False]
 
             # dodajemy wyliczony centroid do listy
