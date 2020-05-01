@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.base import BaseEstimator, ClassifierMixin, clone
+from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.neighbors import DistanceMetric
 import matplotlib.pyplot as plt
@@ -28,6 +28,7 @@ class OptimizedNearestCentroid(BaseEstimator, ClassifierMixin):
         # kontener na centroidy klas
         self.centroids_ = []
         # plt.scatter(self.X_[:, 0], self.X_[:, 1], c=y, cmap='bwr')
+        # plt.tight_layout()
         # plt.savefig("cos")
         # dla kazdej klasy
         for cl in self.classes_:
