@@ -1,0 +1,245 @@
+I"�x<p>Minął tydzień, więc powracamy z przykładami. O ile się nie mylę, to jest to czwarty zestaw od końca i zajmiemy się w nim implementacją prostego (chociaż w sumie kto wie) klasyfikatora zgodnego z <code class="highlighter-rouge">API</code> <code class="highlighter-rouge">scikit-learn</code>.
+<!--more--></p>
+
+<h2 id="klasyfikator-najbliższych-centroidów-ang-nearest-centroid-classifier-nc">Klasyfikator najbliższych centroidów (ang. <em>Nearest Centroid Classifier</em> (NC))</h2>
+
+<p>Żeby nikogo bardzo nie przestraszyć, weźmiemy na tapet klasyfikator najbliższych centroidów. Koncepcyjnie jest on wręcz banalny, a jego działanie można przedstawić następująco:</p>
+
+<ol>
+  <li>Dzielimy dane treningowe na osobne klasy.</li>
+  <li>Wyznaczamy centroid każdej klasy problemu.</li>
+  <li>Dla każdej instancji z zestawu testowego, obliczamy jej odległość (wedle zadanej wcześniej miary) do każdego z centroidów.</li>
+  <li>Przyporządkowujemy klasyfikowaną instancję do tej klasy, której centroid znajduje się najbliżej.</li>
+</ol>
+
+<h3 id="mała-modyfikacja-zawierająca-element-optymalizacji">Mała modyfikacja zawierająca element optymalizacji</h3>
+
+<p>Żeby jednak w dzisiejszym przykładzie pojawiło się jakieś wyzwanie, to do powyższego modelu dodamy opcjonalną optymalizację. Optymalizacja ta będzie polegała na wykorzystaniu <em>reguły trzech sigm</em> (znanej z wykładu) do pozbycia się z każdej z klas obserwacji, które nie mieszczą się w granicy 3 odchyleń standardowych od średniej. Po każdej redukcji będziemy ponownie wyznaczać centroid klasy i kolejny raz sprawdzać, czy znajdują się w niej obserwacje odstające (ang. <em>outliers</em>) – proces będzie powtarzany tak długo, aż wszystkie instancje klasy nie będą przekraczać rzeczonej granicy.</p>
+
+<p>Procedurę tą możemy przedstawić w następujących krokach dla każdej z klas:</p>
+
+<ol>
+  <li>Wyznaczamy centroid klasy.</li>
+  <li>Wyznaczamy odchylenie standardowe wszystkich instancji klasy.</li>
+  <li>Wyznaczamy punkt graniczny w przestrzeni cech i odległość do granicy.</li>
+  <li>Uznajemy za obserwacje odstające wszystkie te, które znajdują się za wyznaczoną granicą i pozbywamy się ich.</li>
+  <li>Wracamy do punktu 1. i powtarzamy cały proces tak długo, dopóki będziemy w stanie wykryć kolejne <em>outliery</em>.</li>
+</ol>
+
+<p>Ale starczy już tej teorii, zabierzmy się za kod.</p>
+
+<h2 id="implementacja-własnego-estymatora-scikit-learn">Implementacja własnego estymatora <code class="highlighter-rouge">scikit-learn</code></h2>
+
+<p>Zaimplementujemy teraz nasz klasyfikator, przechodząc po kolei przez każdą z aż trzech potrzebnych nam metod (a w sumie to inicjalizatora i dwóch metod). Dla szczególnie spragnionych wiedzy – w <a href="https://scikit-learn.org/stable/developers/develop.html">dokumentacji</a> można znaleźć dodatkowe informacje na temat implementacji własnych modeli.</p>
+
+<h3 id="importy-i-zalążek-klasy">Importy i zalążek klasy</h3>
+
+<p>Tworzymy więc pusty plik <code class="highlighter-rouge">onc.py</code> i zaczynamy jak zwykłe od zaimportowania wszystkiego, co będzie nam potrzebne podczas pracy:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">numpy</code> - to już klasyk.</li>
+  <li><code class="highlighter-rouge">BaseEstimator</code> - klasa bazowa dla wszystkich estymatorów <code class="highlighter-rouge">scikit-learn</code>, zawierająca metody <code class="highlighter-rouge">get_param</code> i <code class="highlighter-rouge">set_params</code> (chyba nie potrzebujące wyjaśnienia).</li>
+  <li><code class="highlighter-rouge">ClassifierMixin</code> - klasa zawierająca metodę <code class="highlighter-rouge">score</code>.</li>
+  <li><code class="highlighter-rouge">check_X_y</code>, <code class="highlighter-rouge">check_array</code> oraz <code class="highlighter-rouge">check_is_fitted</code> - metody służące do walidacji poprawności naszych danych treningowych i testowych oraz do sprawdzenia, czy nasz model został już wytrenowany.</li>
+  <li><code class="highlighter-rouge">DistanceMetric</code> - klasa pozwalająca na obliczanie dystansów parowych wedle zadanej metryki (jeżeli ktoś ma taką potrzebę, to można nawet zdefiniować własną funkcję dystansu).</li>
+</ul>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">ClassifierMixin</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils.validation</span> <span class="kn">import</span> <span class="n">check_X_y</span><span class="p">,</span> <span class="n">check_array</span><span class="p">,</span> <span class="n">check_is_fitted</span>
+<span class="kn">from</span> <span class="nn">sklearn.neighbors</span> <span class="kn">import</span> <span class="n">DistanceMetric</span>
+</code></pre></div></div>
+<p>Następnie zaczynamy od zdefiniowania klasy naszego estymatora, która dziedziczyć będzie po <code class="highlighter-rouge">BaseEstimator</code> oraz <code class="highlighter-rouge">ClassifierMixin</code>. Dodamy też komentarz, coby wiedzieć, co w ogóle ta klasa implementuje.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">OptimizedNearestCentroid</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">ClassifierMixin</span><span class="p">):</span>
+    <span class="s">"""
+    Nearest Centroid Classifier optimized according to the three sigma rule.
+    Klasyfikator najbliższych centroidów optymalizowany regułą trzech sigm.
+    """</span>
+</code></pre></div></div>
+
+<h3 id="inicjalizator-__init__">Inicjalizator (<code class="highlighter-rouge">__init__</code>)</h3>
+
+<p>Czas zastanowić się, jakie argumenty będą potrzebne naszemu klasyfikatorowi. Moim zdaniem będą to:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">metric</code> - nazwa metryki dystansu, z której będzie korzystał estymator.</li>
+  <li><code class="highlighter-rouge">optimize</code> - mówiący nam o tym, czy chcemy skorzystać z domyślnej wersji NC, czy może jednak optymalizować.</li>
+  <li><code class="highlighter-rouge">sigma</code> - jaką wielokrotność odchylenia standardowego uznajemy za dopuszczalną.</li>
+</ul>
+
+<p>Należy pamiętać o tym, aby każdy z argumentów miał wartość domyślną. Dzięki temu możemy potem zainicjować nasz model bez podawania argumentów.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="s">'euclidean'</span><span class="p">,</span> <span class="n">optimize</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metric</span> <span class="o">=</span> <span class="n">metric</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">optimize</span> <span class="o">=</span> <span class="n">optimize</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="n">sigma</span>
+</code></pre></div></div>
+
+<h3 id="dopasowanie-modelu-do-danych-fit">Dopasowanie modelu do danych (<code class="highlighter-rouge">fit()</code>)</h3>
+
+<p>Teraz najważniejsza metoda, czyli <code class="highlighter-rouge">fit()</code>. Oczywiście przekazujemy do niej nasze dane treningowe czyli <code class="highlighter-rouge">X</code> i <code class="highlighter-rouge">y</code>. Następnie przechodzimy przez standardową procedurę sprawdzenia kształtu danych, zapamiętania unikalnych klas problemu oraz przechowania <code class="highlighter-rouge">X</code> i <code class="highlighter-rouge">y</code> jako parametrów modelu:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="c1"># czy X i y maja wlasciwy ksztalt
+</span>        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">check_X_y</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="c1"># przechowanie unikalnych klas problemu
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">classes_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+        <span class="c1"># przechowujemy X i y
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">X_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_</span> <span class="o">=</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span>
+</code></pre></div></div>
+<p>Teraz w końcu zrobimy coś, co faktycznie jest właściwe dla naszego konkretnego klasyfikatora. Inicjujemy obiekt <code class="highlighter-rouge">DistanceMetric</code> ze zdefiniowanym wcześniej dystansem <code class="highlighter-rouge">self.metric</code>, z którego chcemy korzystać przy obliczaniu odległości. Do tego przygotowujemy sobie listę <code class="highlighter-rouge">self.centroids</code>, która będzie kontenerem na wyznaczone przez nas centroidy klas i zaczynamy wcześniej opisaną procedurę już dla każdej klasy osobno:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>        <span class="c1"># przygotowujemy narzedzie do liczenia dystansow
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">dm_</span> <span class="o">=</span> <span class="n">DistanceMetric</span><span class="o">.</span><span class="n">get_metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">)</span>
+        <span class="c1"># kontener na centroidy klas
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">centroids_</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># dla kazdej klasy
+</span>        <span class="k">for</span> <span class="n">cl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">classes_</span><span class="p">:</span>
+            <span class="c1"># wybieramy tylko instancje nalezace do danej klasy
+</span>            <span class="n">X_class</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">X_</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">y_</span> <span class="o">==</span> <span class="n">cl</span><span class="p">]</span>
+</code></pre></div></div>
+<p>Gdyby życie było proste (<strong>a wszyscy wiemy, że nie jest</strong>), to pozostała część metody <code class="highlighter-rouge">fit()</code> wyglądałaby następująco:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>            <span class="c1"># wyliczamy centroid klasy
+</span>            <span class="n">class_centroid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X_class</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="c1"># dodajemy wyliczony centroid do listy
+</span>            <span class="bp">self</span><span class="o">.</span><span class="n">centroids_</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">class_centroid</span><span class="p">)</span>
+        <span class="c1"># zwracamy klasyfikator
+</span>        <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></div>
+<p>I w ten sposób byłoby po sprawie.
+Ale my chcemy móc skorzystać ze wspaniałej i niewątpliwie ogromnie ważnej procedury optymalizacji. W związku z tym <strong>zapominamy o kodzie przedstawionym wyżej</strong> i w jego miejsce wrzucamy kochaną i całkowicie nieodpowiednią nieskończoną pętlę. W pętli zaczynamy od wyliczenia centroidu klasy a potem dodajemy możliwość przerwania, jeżeli nie chcielibyśmy optymalizować naszego modelu:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>            <span class="c1"># petla
+</span>            <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="c1"># wyliczamy centroid klasy
+</span>                <span class="n">class_centroid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X_class</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                <span class="c1"># jeżeli nie optymalizujemy to kończymy
+</span>                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">optimize</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+                    <span class="k">break</span>
+</code></pre></div></div>
+
+<p>Przed nami właściwa procedura parametryzacji. Zgodnie z założeniem liczymy odchylenie standardowe wszystkich instancji klasy (będzie to wektor). Następnie dodajemy pomnożone <code class="highlighter-rouge">self.simga</code> razy odchylenie do centroidu, aby wyznaczyć instancję graniczną (znajdującą się 3 odchylenia standardowe od centroidu). Dzięki temu możemy z wykorzystaniem <code class="highlighter-rouge">self.dm</code> policzyć dystans między tą instancją a centroidem, który jednocześnie jest największym dystansem jaki dopuszczamy dla obiektów klasy. Dalej liczymy dystans każdej instancji klasy od centroidu.</p>
+
+<p>Funkcja <code class="highlighter-rouge">np.squeeze()</code> pozwala nam się pozbyć wszystkich wymiarów o wartości 1 (czyli tak naprawdę pustych), a <code class="highlighter-rouge">np.reshape()</code> jest konieczny ze względu na specyfikę wejść przyjmowanych przez <code class="highlighter-rouge">DistanceMetric</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>                <span class="c1"># liczymy odchylenie standardowe instancji klasy
+</span>                <span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">X_class</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                <span class="c1"># możliwie najdalej znajdująca się instancje
+</span>                <span class="bp">self</span><span class="o">.</span><span class="n">borderline_</span> <span class="o">=</span> <span class="n">class_centroid</span> <span class="o">+</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">*</span> <span class="n">std</span><span class="p">)</span>
+                <span class="c1"># maksymalny dopuszczalny dystans
+</span>                <span class="n">accepted_distances</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dm_</span><span class="o">.</span><span class="n">pairwise</span><span class="p">(</span>
+                    <span class="n">class_centroid</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">X_class</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">borderline_</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">X_class</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])))</span>
+                <span class="c1"># liczymy dystanse wszystkich obiektow klasy od centroidu
+</span>                <span class="n">distances</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dm_</span><span class="o">.</span><span class="n">pairwise</span><span class="p">(</span>
+                    <span class="n">class_centroid</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">X_class</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">X_class</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Teraz musimy zdecydować w jaki sposób chcemy usuwać z klasy obserwacje odstające. Moglibyśmy zrobić to np. poprzez wyznaczenie indeksów instancji z dystansami większymi niż dopuszczalne (<code class="highlighter-rouge">np.argwhere</code>) i skorzystanie z funkcji <code class="highlighter-rouge">np.delete()</code>.</p>
+
+<p>Zrobimy to jednak w inny (i często preferowany) sposób. Mianowicie skorzystamy z maski binarnej. Tworzymy więc macierz <code class="highlighter-rouge">self.outliers_mask_</code> która odpowiada kształtem naszej macierzy <code class="highlighter-rouge">distances</code> i zawiera wartości <code class="highlighter-rouge">True</code> wszędzie tam, gdzie dystans przekracza dopuszczalną wartość (w przeciwnym razie mamy wartość <code class="highlighter-rouge">False</code>).</p>
+
+<p>Teraz na zakończenie potrzebujemy warunku, który zakończy procedurę optymalizacji jeżeli nie znajdziemy żadnej obserwacji odstającej, lub usunie z klasy znalezione <em>outliery</em>. Usuwanie odbywa się poprzez pozostawienie w klasie tylko tych instancji, których dystanse nie przekraczają wyznaczonej przez nas granicy. Sposób z wykorzystaniem maski binarnej jest często wygodniejszy i szybszy niż <code class="highlighter-rouge">np.delete()</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>                <span class="c1"># uznajemy za outliery te instancje, ktore znajduja sie od
+</span>                <span class="c1"># centroidu dalej niz 3 * std
+</span>                <span class="bp">self</span><span class="o">.</span><span class="n">outliers_mask_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">distances</span> <span class="o">&gt;</span> <span class="n">accepted_distances</span><span class="p">)</span>
+                <span class="c1"># konczymy optymalizacje, jezeli nie mamy outlierow
+</span>                <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outliers_mask_</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="c1"># w inym przypadku pozbywamy sie outlierow
+</span>                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">X_class</span> <span class="o">=</span> <span class="n">X_class</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">outliers_mask_</span> <span class="o">==</span> <span class="bp">False</span><span class="p">]</span>
+
+            <span class="c1"># dodajemy wyliczony centroid do listy
+</span>            <span class="bp">self</span><span class="o">.</span><span class="n">centroids_</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">class_centroid</span><span class="p">)</span>
+        <span class="c1"># zwracamy klasyfikator
+</span>        <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></div>
+
+<p>Kiedy już skończymy optymalizację i wyjdziemy z pętli (lub wcale nie wykonamy optymalizacji), dodajemy wyznaczony centroid klasy do naszego kontenera i zajmujemy się kolejną klasą problemu (lub kończymy procedurę trenowania i zwracamy klasyfikator).</p>
+
+<h3 id="predykcja-predict">Predykcja (<code class="highlighter-rouge">predict()</code>)</h3>
+
+<p>Mamy już <code class="highlighter-rouge">fit()</code> więc teraz przydałby się i <code class="highlighter-rouge">predict()</code>. Zaczynamy od rutyny, czyli sprawdzenia czy model został wcześniej wyuczony oraz czy dane testowe nie są puste i mają odpowiedni kształt.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="c1"># sprawdzenie do wywolany zostal fit
+</span>        <span class="n">check_is_fitted</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="c1"># sprawdzenie wejscia
+</span>        <span class="n">X</span> <span class="o">=</span> <span class="n">check_array</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Dalej postępujemy wedle zasady działania przedstawionej na początku dzisiejszego wpisu. Wyliczamy dystanse każdej instancji testowej do wyznaczonych centroidów klas a następnie wybieramy jako predykcję tą z klas, której centroidu znajdujemy się bliżej. Predykcję oczywiście zwracamy.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>        <span class="c1"># liczymy dystanse instancji testowych od centroidow
+</span>        <span class="n">distance_pred</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dm_</span><span class="o">.</span><span class="n">pairwise</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">centroids_</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+        <span class="c1"># uznajemy, ze instancje naleza do klasy,
+</span>        <span class="c1"># ktorej centroid znajduje sie blizej
+</span>        <span class="n">y_pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">distance_pred</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="c1"># zwracamy predykcje
+</span>        <span class="k">return</span> <span class="n">y_pred</span>
+</code></pre></div></div>
+
+<p>I to by było na tyle.</p>
+
+<h2 id="przetestujmy-nasz-klasyfikator">Przetestujmy nasz klasyfikator</h2>
+
+<p>Wypadałoby przetestować zaimplementowany przez nas model i sprawdzić, czy i jak działa. W tym celu przygotujemy sobie <strong>bardzo proste</strong> środowisko testowe. Nie dzieje się tutaj nic, z czym nie bylibyśmy już zaznajomieni. Jedyną <em>nowością</em> może być zaimportowanie naszego modelu z wcześniej przygotowanego przez nas pliku z implementacją.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">from</span> <span class="nn">onc</span> <span class="kn">import</span> <span class="n">OptimizedNearestCentroid</span>
+<span class="kn">from</span> <span class="nn">sklearn.datasets</span> <span class="kn">import</span> <span class="n">make_classification</span>
+<span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">train_test_split</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">accuracy_score</span>
+
+<span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">make_classification</span><span class="p">(</span>
+    <span class="n">n_samples</span><span class="o">=</span><span class="mi">700</span><span class="p">,</span>
+    <span class="n">n_features</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">n_informative</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">n_repeated</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">n_redundant</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">flip_y</span><span class="o">=</span><span class="mf">.15</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="o">=</span><span class="mi">32456</span><span class="p">,</span>
+    <span class="n">n_clusters_per_class</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">train_test_split</span><span class="p">(</span>
+    <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span>
+    <span class="n">test_size</span><span class="o">=</span><span class="mf">.3</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span>
+<span class="p">)</span>
+
+<span class="n">clf</span> <span class="o">=</span> <span class="n">OptimizedNearestCentroid</span><span class="p">(</span><span class="n">optimize</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="n">clfo</span> <span class="o">=</span> <span class="n">OptimizedNearestCentroid</span><span class="p">()</span>
+<span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+<span class="n">clfo</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+
+<span class="n">pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+<span class="n">predo</span> <span class="o">=</span> <span class="n">clfo</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+
+<span class="k">print</span><span class="p">(</span><span class="s">"Zwykly:         </span><span class="si">%.3</span><span class="s">f"</span> <span class="o">%</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Optymalizowany: </span><span class="si">%.3</span><span class="s">f"</span> <span class="o">%</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">predo</span><span class="p">))</span>
+</code></pre></div></div>
+<p>Spójrzmy na wyniki:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; Zwykly:         0.914
+&gt;&gt; Optymalizowany: 0.924
+</code></pre></div></div>
+<p>Faktycznie wygląda na to, że nasza optymalizacja <em>coś robi</em>. Oczywiście jak wiemy, na podstawie tak nienachalnego umysłowo eksperymentu nie możemy wysnuć żadnych wniosków, ale też nie to było dzisiaj naszym celem.</p>
+
+<p>Warto za to spojrzeć na to, jak faktycznie zachowuje się nasz model. W tym celu rzućmy okiem na proste wykresy przestrzeni cech, obrazujące działanie optymalizacji.</p>
+
+<table><tr>
+<td> <img src="/examples/kod6/jeden.png" style="width: 310;" /> </td>
+<td> <img src="/examples/kod6/dwa.png" style="width: 310;" /> </td>
+<td> <img src="/examples/kod6/trzy.png" style="width: 310;" /> </td>
+</tr></table>
+
+<p>Na pierwszym od lewej wykresie widzimy przestrzeń cech, nie dzieje się tutaj jeszcze nic niesamowitego. Wykres środkowy ukazuje wstępnie wyliczone centroidy klas (oznaczone kolorem czarnym). Magię właściwą możemy zaobserwować na trzecim wykresie – widzimy na nim instancje uznane za obserwacje odstające klasy niebieskiej (oznaczone kolorem szarym) oraz to, jak wraz z ich stopniowym usuwaniem centroid tej klasy przesuwa się na <em>południowy-wschód</em>.</p>
+
+<p>To wszystko na dzisiaj, a za tydzień implementacja własnych klasyfikatorów zespołowych.</p>
+
+<p><img src="/examples/kod6/dogconstr.png" alt="" /></p>
+:ET

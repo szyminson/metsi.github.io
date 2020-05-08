@@ -1,0 +1,265 @@
+I"�u<p>Kolejna środa, a z nią kolejna dawka przykładów. Dzisiejszy temat to rozwinięcie parowych testów statystycznych z poprzedniego przykładu o większą ilość zbiorów danych. Oprócz tego znajdzie się też parę innych nowości. Gorąco zachęcam do lektury.</p>
+
+<!--more-->
+
+<h2 id="eksperymenty-na-wielu-zbiorach-danych">Eksperymenty na wielu zbiorach danych</h2>
+
+<p>Dzisiaj nauczymy się wykonywać eksperymenty nie tylko na wielu klasyfikatorach, ale również na wielu zbiorach danych. W szybki sposób bez rozpisywania się nad tym co już było przeprowadzimy całą procedurę krok po kroku.</p>
+
+<h3 id="modele-klasyfikacji">Modele klasyfikacji</h3>
+
+<p>Tym razem zaczniemy od klasyfikatorów. Najpierw przygotowujemy słownik zawierający wybrane modele klasyfikacji, które zostaną użyte do dzisiejszych eksperymentów.  Wybieramy trzy:</p>
+
+<ul>
+  <li>Naiwny klasyfikator bayesowski - <strong>GNB</strong></li>
+  <li>Maszynę wektorów nośnych - <strong>SVM</strong></li>
+  <li>Klasyfikator k najbliższych sąsiadów - <strong>kNN</strong></li>
+  <li>Drzewo klasyfikacyjne i regresyjne - <strong>CART</strong></li>
+</ul>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.naive_bayes</span> <span class="kn">import</span> <span class="n">GaussianNB</span>
+<span class="kn">from</span> <span class="nn">sklearn.neighbors</span> <span class="kn">import</span> <span class="n">KNeighborsClassifier</span>
+<span class="kn">from</span> <span class="nn">sklearn.tree</span> <span class="kn">import</span> <span class="n">DecisionTreeClassifier</span>
+<span class="kn">from</span> <span class="nn">sklearn.svm</span> <span class="kn">import</span> <span class="n">SVC</span>
+
+<span class="n">clfs</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">'GNB'</span><span class="p">:</span> <span class="n">GaussianNB</span><span class="p">(),</span>
+    <span class="s">'SVM'</span><span class="p">:</span> <span class="n">SVC</span><span class="p">(),</span>
+    <span class="s">'kNN'</span><span class="p">:</span> <span class="n">KNeighborsClassifier</span><span class="p">(),</span>
+    <span class="s">'CART'</span><span class="p">:</span> <span class="n">DecisionTreeClassifier</span><span class="p">(</span><span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="dane">Dane</h3>
+
+<p>Teraz wybieramy dane na których chcemy przeprowadzić eksperymenty. W tym wypadku wybierzemy 20 różnych zbiorów danych rzeczywistych. Zestawy te można pobrać w postaci plików CSV z repozytorium <a href="https://github.com/w4k2/benchmark_datasets/blob/master/datasets/"><code class="highlighter-rouge">benchmark_datasets</code></a>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">datasets</span> <span class="o">=</span> <span class="p">[</span><span class="s">'australian'</span><span class="p">,</span> <span class="s">'balance'</span><span class="p">,</span> <span class="s">'breastcan'</span><span class="p">,</span> <span class="s">'cryotherapy'</span><span class="p">,</span> <span class="s">'diabetes'</span><span class="p">,</span>
+            <span class="s">'digit'</span><span class="p">,</span> <span class="s">'ecoli4'</span><span class="p">,</span> <span class="s">'german'</span><span class="p">,</span> <span class="s">'glass2'</span><span class="p">,</span> <span class="s">'heart'</span><span class="p">,</span> <span class="s">'ionosphere'</span><span class="p">,</span>
+            <span class="s">'liver'</span><span class="p">,</span> <span class="s">'monkthree'</span><span class="p">,</span> <span class="s">'shuttle-c0-vs-c4'</span><span class="p">,</span> <span class="s">'sonar'</span><span class="p">,</span> <span class="s">'soybean'</span><span class="p">,</span>
+            <span class="s">'vowel0'</span><span class="p">,</span> <span class="s">'waveform'</span><span class="p">,</span> <span class="s">'wisconsin'</span><span class="p">,</span> <span class="s">'yeast3'</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h3 id="eksperyment">Eksperyment</h3>
+
+<p>Mając już dane i wybrane metody, które chcemy przetestować. Na początku musimy się do eksperymentów trochę przygotować. Odczytujemy liczbę wybranych zbiorów za pomocą funkcji <code class="highlighter-rouge">len()</code>. Wybieramy liczbę podziałów oraz powtórzeń. Tworzymy bardzo dobrze już znany obiekt ze stratyfikowaną wielokrotną walidacją krzyżową <code class="highlighter-rouge">rskf</code>. Następnie tworzymy zerową macierz na wyniki <code class="highlighter-rouge">scores</code>. Macierz ta posiada aż trzy wymiary.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">RepeatedStratifiedKFold</span>
+
+<span class="n">n_datasets</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">datasets</span><span class="p">)</span>
+<span class="n">n_splits</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">n_repeats</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">rskf</span> <span class="o">=</span> <span class="n">RepeatedStratifiedKFold</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="n">n_splits</span><span class="p">,</span> <span class="n">n_repeats</span><span class="o">=</span><span class="n">n_repeats</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+
+<span class="n">scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="n">n_datasets</span><span class="p">,</span> <span class="n">n_splits</span> <span class="o">*</span> <span class="n">n_repeats</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Kolejny krok to już przeprowadzanie eksperymentów na wcześniej wybranych zbiorach danych. Najpierw w pętli wczytujemy te dane. Pamiętajmy o tym, żeby zgadzały się ścieżki do plików ze zbiorami. Następnie w kolejnej pętli wczytany aktualnie zbiór dzielimy na foldy. Klonujemy modele za pomocą funkcji <code class="highlighter-rouge">clone</code> i każdy z tych modeli uczymy oraz dokonujemy predykcji na odpowiednich podzbiorach danych. Na podstawie uzyskanych wyników obliczamy dokładność klasyfikacji i zapisujemy w macierzy <code class="highlighter-rouge">scores</code>. W ostatnim kroku zapisujemy wszystkie wyniki do pliku.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">clone</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">accuracy_score</span>
+
+<span class="k">for</span> <span class="n">data_id</span><span class="p">,</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">datasets</span><span class="p">):</span>
+    <span class="n">dataset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">"datasets/</span><span class="si">%</span><span class="s">s.csv"</span> <span class="o">%</span> <span class="p">(</span><span class="n">dataset</span><span class="p">),</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">","</span><span class="p">)</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">fold_id</span><span class="p">,</span> <span class="p">(</span><span class="n">train</span><span class="p">,</span> <span class="n">test</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">clf_id</span><span class="p">,</span> <span class="n">clf_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">clfs</span><span class="p">):</span>
+            <span class="n">clf</span> <span class="o">=</span> <span class="n">clone</span><span class="p">(</span><span class="n">clfs</span><span class="p">[</span><span class="n">clf_name</span><span class="p">])</span>
+            <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+            <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+            <span class="n">scores</span><span class="p">[</span><span class="n">clf_id</span><span class="p">,</span> <span class="n">data_id</span><span class="p">,</span> <span class="n">fold_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">)</span>
+
+<span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s">'results'</span><span class="p">,</span> <span class="n">scores</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="analiza-wyników">Analiza wyników</h3>
+
+<p>Mając już wyniki możemy przystąpić do ich analizy. Na samym początku musimy wczytać wcześniej zapisane wyniki. Warto zwrócić uwagę na wymiary macierzy, która została wczytana. Można to zrobić za pomocą odpowiedniego pola <code class="highlighter-rouge">shape</code> w obiekcie typu <code class="highlighter-rouge">ndarray</code> z biblioteki <code class="highlighter-rouge">numpy</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s">'results.npy'</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">Scores:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">scores</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Wypisane zostaną wymiary macierzy:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Scores:
+ (4, 20, 10)
+</code></pre></div></div>
+
+<p>Oznacza to, że w naszej macierzy znajdują się zebrane wszystkie wyniki dla 4 klasyfikatorów, 20 baz i 10 foldów. Teraz musimy te wyniki uśrednić po foldach. Pozwoli nam to zrobić funkcja <code class="highlighter-rouge">mean</code> z ustawieniem parametru <code class="highlighter-rouge">axis=2</code> co oznacza, że uśredniony zostanie 3 wymiar (liczymy od 0, 1, 2 - trzeci wymiar). Następnie dokonamy transpozycji tej macierzy, tak aby w kolumnach (drugi wymiar) naszej macierzy znajdowały się metody, a w wierszach zbiory danych.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">mean_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">Mean scores:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">mean_scores</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Zostanie wypisana taka tabela:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Mean scores:
+ [[0.78188406 0.65869565 0.70289855 0.81449275]
+ [0.904      0.9048     0.8496     0.7744    ]
+ [0.96267175 0.96999249 0.97290146 0.94511593]
+ [0.85       0.62222222 0.71666667 0.85555556]
+ [0.75004244 0.69529751 0.68164417 0.69337917]
+ [1.         0.99440491 0.99213064 1.        ]
+ [0.83489903 0.98511853 0.98658911 0.96870061]
+ [0.7305     0.71       0.6895     0.691     ]
+ [0.47895903 0.92059801 0.90869324 0.87131783]
+ [0.84074074 0.65       0.65925926 0.74074074]
+ [0.89030181 0.94160966 0.83468813 0.88738431]
+ [0.56086957 0.69565217 0.65652174 0.62463768]
+ [0.9196724  0.96390663 0.98375102 0.9729484 ]
+ [0.99644734 0.99672056 0.99945355 1.        ]
+ [0.67102207 0.79088269 0.7858885  0.73554007]
+ [1.         0.97777778 0.94666667 1.        ]
+ [0.93725837 0.96155463 0.99290366 0.98481003]
+ [0.81       0.8668     0.8214     0.7521    ]
+ [0.95420349 0.96566804 0.95706064 0.93846865]
+ [0.30521203 0.95148444 0.94609155 0.93059082]]
+</code></pre></div></div>
+
+<h3 id="rangi">Rangi</h3>
+
+<p>W kolejnym kroku przystąpimy do wyliczenia rang na podstawie uśrednionych wyników. Pamiętajmy, że im wyższa ranga tym metoda jest lepsza. W tym wypadku rangi przypisujemy od 1 do 4, gdzie 4 to jest liczba testowanych modeli. W przypadku remisów dokonujemy uśrednienia. Pomoże nam w tym funkcja <code class="highlighter-rouge">rankdata()</code> z biblioteki <code class="highlighter-rouge">numpy</code>. Na koniec uzyskane rangi zamieniamy z listy na macierz <code class="highlighter-rouge">numpy </code> i wypisujemy.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">rankdata</span>
+<span class="n">ranks</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">ms</span> <span class="ow">in</span> <span class="n">mean_scores</span><span class="p">:</span>
+    <span class="n">ranks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rankdata</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+<span class="n">ranks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ranks</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">Ranks:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">ranks</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Uzyskane rangi:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Ranks:
+ [[3.  1.  2.  4. ]
+ [3.  4.  2.  1. ]
+ [2.  3.  4.  1. ]
+ [3.  1.  2.  4. ]
+ [4.  3.  1.  2. ]
+ [3.5 2.  1.  3.5]
+ [1.  3.  4.  2. ]
+ [4.  3.  1.  2. ]
+ [1.  4.  3.  2. ]
+ [4.  1.  2.  3. ]
+ [3.  4.  1.  2. ]
+ [1.  4.  3.  2. ]
+ [1.  2.  4.  3. ]
+ [1.  2.  3.  4. ]
+ [1.  4.  3.  2. ]
+ [3.5 2.  1.  3.5]
+ [1.  2.  4.  3. ]
+ [2.  4.  3.  1. ]
+ [2.  4.  3.  1. ]
+ [1.  4.  3.  2. ]]
+</code></pre></div></div>
+
+<p>Nadal taki sposób jest mało czytelny i trudno jest jednoznacznie określić, która metoda jest nalepsza. Dlatego teraz dokonujemy uśrednienia uzyskanych rang i wypisujemy uzyskane wyniki.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">mean_ranks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">ranks</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">Mean ranks:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">mean_ranks</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Uśrednione rangi:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Models:  ['GNB', 'SVM', 'kNN', 'CART']
+Mean ranks:  [2.25 2.85 2.5  2.4 ]
+</code></pre></div></div>
+
+<p>Na podstawie tych wyników można stwierdzić, że metody są na dość zbliżonym poziomie, ale nadal nie wiemy o tym, czy te wyniki są statystycznie istotne.</p>
+
+<h3 id="testy-parowe">Testy parowe</h3>
+
+<p>Mając już rangi możemy przystąpić do testów parowych, które pierwszy raz pojawiły się na poprzednich przykładach. Dzisiaj zamiast <em>testu T Studenta</em> zostanie użyty <em>test Wilcoxona</em>. Użycie tego testu oznacza zaimportowanie oraz wywołanie funkcji <code class="highlighter-rouge">ranksums</code> z biblioteki <code class="highlighter-rouge">scipy</code>. Ustawiamy wartość <code class="highlighter-rouge">alpha</code>, która będzie przyjętym przez nas progiem ufności podczas sprawdzania istotności.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">ranksums</span>
+
+<span class="n">alfa</span> <span class="o">=</span> <span class="mf">.05</span>
+<span class="n">w_statistic</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+<span class="n">p_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)):</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)):</span>
+        <span class="n">w_statistic</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">p_value</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">ranksums</span><span class="p">(</span><span class="n">ranks</span><span class="o">.</span><span class="n">T</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">ranks</span><span class="o">.</span><span class="n">T</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+</code></pre></div></div>
+
+<p>Teraz utworzymy dużo czytelniejsze tabele za pomocą biblioteki <code class="highlighter-rouge">tabulate</code>. Odbywa to się podobnie jak w ostatnim przykładzie. Jedyna różnica to, że ustawimy dynamicznie nazwy nagłówków i nazwy kolumn z wykorzystaniem kluczy słownika modeli klasyfikacji.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">tabulate</span> <span class="kn">import</span> <span class="n">tabulate</span>
+
+<span class="n">headers</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">clfs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="n">names_column</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">clfs</span><span class="o">.</span><span class="n">keys</span><span class="p">())),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">w_statistic_table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">names_column</span><span class="p">,</span> <span class="n">w_statistic</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">w_statistic_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">w_statistic_table</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">floatfmt</span><span class="o">=</span><span class="s">".2f"</span><span class="p">)</span>
+<span class="n">p_value_table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">names_column</span><span class="p">,</span> <span class="n">p_value</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">p_value_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">p_value_table</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">floatfmt</span><span class="o">=</span><span class="s">".2f"</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">w-statistic:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">w_statistic_table</span><span class="p">,</span> <span class="s">"</span><span class="se">\n\n</span><span class="s">p-value:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">p_value_table</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Po wypisaniu widzimy uzyskane statystyki i wartości p-wartości:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>w-statistic:
+         GNB    SVM    kNN    CART
+----  -----  -----  -----  ------
+GNB    0.00  -1.61  -0.62   -0.50
+SVM    1.61   0.00   0.99    1.30
+
+kNN    0.62  -0.99   0.00    0.28
+CART   0.50  -1.30  -0.28    0.00
+
+p-value:
+         GNB    SVM    kNN    CART
+----  -----  -----  -----  ------
+GNB    1.00   0.11   0.53    0.62
+SVM    0.11   1.00   0.32    0.19
+kNN    0.53   0.32   1.00    0.78
+CART   0.62   0.19   0.78    1.00
+</code></pre></div></div>
+
+<p>Następnie musimy wyznaczyć macierz przewag. Procedura przebiega w dość analogiczny sposób jak w ostatnich przykładach. Jedynie teraz używamy zmiennej <code class="highlighter-rouge">w_statistic</code>, do której zostały zapisane wyniki z parowego <em>testu Wilcoxona</em>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">advantage</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+<span class="n">advantage</span><span class="p">[</span><span class="n">w_statistic</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">advantage_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+    <span class="p">(</span><span class="n">names_column</span><span class="p">,</span> <span class="n">advantage</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">headers</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">Advantage:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">advantage_table</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Poniżej wyniki:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Advantage:
+         GNB    SVM    kNN    CART
+----  -----  -----  -----  ------
+GNB       0      0      0       0
+SVM       1      0      1       1
+kNN       1      0      0       1
+CART      1      0      0       0
+</code></pre></div></div>
+
+<p>Pamiętajmy jednak, że po pierwsze posiadamy wyznaczone rangi, a po drugie nie wiemy czy te wyniki są istotne statystycznie. Teraz możemy przejść do kluczowego momentu, który pozwoli nam to określić. Robimy to w dosłownie identyczny sposób jak było to pokazane w ostatnim przykładzie.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">significance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+<span class="n">significance</span><span class="p">[</span><span class="n">p_value</span> <span class="o">&lt;=</span> <span class="n">alfa</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">significance_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+    <span class="p">(</span><span class="n">names_column</span><span class="p">,</span> <span class="n">significance</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">headers</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">Statistical significance (alpha = 0.05):</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">significance_table</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Wypisujemy wyniki i sprawdzamy:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Statistical significance (alpha = 0.05):
+         GNB    SVM    kNN    CART
+----  -----  -----  -----  ------
+GNB       0      0      0       0
+SVM       0      0      0       0
+kNN       0      0      0       0
+CART      0      0      0       0
+</code></pre></div></div>
+
+<p>Niestety, w żadnym testowanym zestawieniu nie można odrzucić hipotezy zerowej. Oznacza to, że wyniki jakie ostatecznie uzyskaliśmy są nieistotne statystycznie po przeprowadzeniu odpowiednich testów parowych. Mimo różnic jakie występują pomiędzy przetestowanymi modelami klasyfikacji eksperymenty przeprowadzone na wybranych przez nas zbiorach danych nie pozwalają stwierdzić, która z tych metod jest lepsza z istotnością statystyczną. <strong>Jest to dla nas bardzo ważna lekcja mówiąca o tym, że lepszy nie zawsze musi oznaczać lepszy statystycznie.</strong></p>
+
+<p><img src="/examples/no-sd.jpg" alt="" /></p>
+:ET
