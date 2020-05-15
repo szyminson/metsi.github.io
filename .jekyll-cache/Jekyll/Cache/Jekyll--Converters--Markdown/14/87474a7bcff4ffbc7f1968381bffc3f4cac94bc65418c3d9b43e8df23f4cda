@@ -1,0 +1,280 @@
+I"��<p>Tematem na dzisiaj będzie implementacja zespołu klasyfikatorów. Jest to taki szczególny rodzaj klasyfikatora, który składa się z wielu klasyfikatorów. Zatem przejdźmy od razu do konkretów.</p>
+
+<!--more-->
+
+<h2 id="zespół-klasyfikatorów">Zespół klasyfikatorów</h2>
+
+<p>Na ostatnich zajęciach pokazane było jak napisać implementację klasyfikatora zgodnego z <code class="highlighter-rouge">API</code> <code class="highlighter-rouge">scikit-learn</code>. Dzisiaj zajmiemy się zespołami klasyfikatorów, inaczej nazywane komitetami klasyfikatorów.</p>
+
+<h3 id="wstęp">Wstęp</h3>
+
+<p>Na początek trochę wyjaśnień. Główna idea budowania zespołów klasyfikatorów oparta jest na tym, że najpierw wiele modeli jest uczonych, a następnie ich predykcje są łączone w celu podjęcia wspólnej decyzji. Zazwyczaj modele te budowane są w oparciu o “proste” klasyfikatory. Wspólne podejmowanie decyzji pozwala uzyskiwanie dobrej jakości klasyfikacji przy zachowaniu odpowiedniej generalizacji. Kluczową tutaj sprawą jest zapewnienie dywersyfikacji komitetu lub inaczej mówiąc różnorodności modeli za pomocą odpowiednich technik. Bez sensowne jest tworzenie zespołu składającego się z klasyfikatorów, które podejmują identyczne decyzje. Dlatego stosuje się odpowiednie metody zapewniające zachowanie różnorodności.</p>
+
+<p>Następnie mając już taki zespół musimy w pewien sposób agregować odpowiedzi wszystkich modeli w jedną wspólną odpowiedź całego komitetu. To w jaki sposób jest to wykonywane określa reguła decyzyjna. Istnieją różne sposoby, jednak najbardziej znanym jest głosowanie twarde. Każdy model wskazuje jakąś etykietę, a większość “głosów” decyduje o tym jaka jest podejmowana decyzja.  Jest to dość podobna zasada do koła ratunkowego “Pytanie do publiczności” w popularnym teleturnieju “Milionerzy”. Zakładamy, że wszyscy na publiczności mają równą wagę głosu i każdy typuje jakąś odpowiedź. Wartym wspomnienia jest to, że osoby tam się znajdujące zazwyczaj nie są ekspertami w dziedzinie danego pytania, jednak wspólnymi siłami często potrafią wskazać poprawną odpowiedź na zadane pytanie.</p>
+
+<p>Załóżmy teraz, że mamy pewien problem dwuwymiarowy, który próbujemy rozwiązać za pomocą liniowego klasyfikatora. Jak to jest widoczne na rysunkach poniżej wyznaczenie linii rozdzielającej idealnie dane jest niemożliwe, ponieważ mamy tutaj problem liniowo nieseparowalny. Niebieskie kropki to jedna klasa, a czerwona to druga.</p>
+
+<p><img src="/examples/kod7/figures/Ensemble0.png" alt="Ensemble0" style="zoom: 67%;" />  <img src="/examples/kod7/figures/Ensemble1.png" alt="Ensemble1" style="zoom: 67%;" />
+ <img src="/examples/kod7/figures/Ensemble2.png" alt="Ensemble2" style="zoom: 67%;" />  <img src="/examples/kod7/figures/Ensemble3.png" alt="Ensemble2" style="zoom: 67%;" /></p>
+
+<p>Pojawia się jednak pewne “ale”. Możemy ten problem w miarę skutecznie rozwiązać za pomocą liniowych klasyfikatorów, ale tworząc z nich komitet klasyfikatorów. Kiedy połączymy w odpowiedni sposób trzy modele przedstawione na rysunkach powyżej, otrzymamy zespół klasyfikatorów. Tak wyuczony komitet jest w stanie wyznaczyć granicę decyzyjną opartą na modelach linowych dla problemu liniowo nieseparowalnego. Jak widać na poniższym rysunku jakość predykcji liniowych modeli rośnie, gdy zaczynają działać w jednym zespole. Nie przerywana linia oznacza granicę decyzji dla całego zespołu.</p>
+
+<p><img src="/examples/kod7/figures/EnsembleFull.png" alt="EnsembleFull" style="zoom:80%;" /></p>
+
+<h3 id="implementacja">Implementacja</h3>
+
+<p>Teraz znając już pewne podstawy, możemy przejść do części implementacyjnej. Stworzenie zespołu to oznacza uczenie wielu modeli, które podejmują wspólną decyzję. Musimy pamiętać o tym, że komitet klasyfikatorów wymaga od nas zapewnienia dywersyfikacji. W tym celu wykorzystamy do tego dość znaną technikę tworzenia losowych podprzestrzeni cech (ang. Random Subspace Ensemble). Oznacza to, że każdy model będzie się uczyć oraz dokonywać predykcji wykorzystując niepełny i losowy zestaw cech danych.</p>
+
+<h4 id="importy">Importy</h4>
+
+<p>Na początek stwórzmy sobie nowy plik o nazwie <code class="highlighter-rouge">rse.py</code>. W samym nagłówku naszego pliku umieszczamy odpowiednie biblioteki i funkcje potrzebne nam w dalszej części programu. Całość zasadniczo się nie różni jak podczas implementacji klasyfikatora. Jedyny wyjątek to zamiast <code class="highlighter-rouge">BaseEstimator</code>, będziemy dziedziczyć klasę <code class="highlighter-rouge">BaseEnsemble</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">from</span> <span class="nn">sklearn.ensemble</span> <span class="kn">import</span> <span class="n">BaseEnsemble</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">ClassifierMixin</span><span class="p">,</span> <span class="n">clone</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils.validation</span> <span class="kn">import</span> <span class="n">check_array</span><span class="p">,</span> <span class="n">check_is_fitted</span><span class="p">,</span> <span class="n">check_X_y</span>
+</code></pre></div></div>
+
+<h4 id="klasa">Klasa</h4>
+
+<p>Kolejny krok to definicja klasy oraz inicjalizator. Parametry jakie będzie przyjmować implementowany zespół to <code class="highlighter-rouge">base_estimator</code>, która oznacza klasyfikator jaki będzie używany do tworzenia modeli w komitecie. Maksymalna liczba modeli jest wyrażana za pomocą parametru <code class="highlighter-rouge">n_estimators</code>, gdzie wartość domyślna jest równa 10.  Parametr <code class="highlighter-rouge">n_subspace_features</code> wyraża liczbę wykorzystanych cech do stworzenia jednej podprzestrzeni z wartością domyślną 5. Ilość tych podprzestrzeni jest równa liczbie modeli. Następnie znajduje się parametr ` hard_voting<code class="highlighter-rouge"> określający jaki jest tryb podejmowania decyzji, domyślnie ustawiony na </code>True<code class="highlighter-rouge">. W dalszej części znajdzie się więcej informacji do czego nam ten parametr posłuży. Ostatni to dobrze znany parametr </code>random_state`, który pozwoli na zachowanie pewnej powtarzalności podczas wykonywania eksperymentów.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">BaseEnsemble</span><span class="p">,</span> <span class="n">ClassifierMixin</span><span class="p">):</span>
+    <span class="s">"""
+    Random subspace ensemble
+    Komitet klasyfikatorow losowych podprzestrzeniach cech
+    """</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base_estimator</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="c1"># Klasyfikator bazowy
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">base_estimator</span> <span class="o">=</span> <span class="n">base_estimator</span>
+        <span class="c1"># Liczba klasyfikatorow
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">n_estimators</span> <span class="o">=</span> <span class="n">n_estimators</span>
+        <span class="c1"># Liczba cech w jednej podprzestrzeni
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">n_subspace_features</span> <span class="o">=</span> <span class="n">n_subspace_features</span>
+        <span class="c1"># Tryb podejmowania decyzji
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">hard_voting</span> <span class="o">=</span> <span class="n">hard_voting</span>
+        <span class="c1"># Ustawianie ziarna losowosci
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">random_state</span> <span class="o">=</span> <span class="n">random_state</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">random_state</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="uczenie">Uczenie</h4>
+
+<p>Teraz pora na funkcję, która pozwoli na uczenie całego zespołu. W pierwszej kolejności dokonujemy pewnych rutynowych kroków. Sprawdzenie poprawności danych, zapis nazw klas, dodatkowo zapis liczby atrybutów. Następnie musimy sprawdzić czy liczba cech, które chcemy wykorzystać do tworzenia podprzestrzeni nie jest większa od liczby cech jakie posiadają dane.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="c1"># Sprawdzenie czy X i y maja wlasciwy ksztalt
+</span>        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">check_X_y</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="c1"># Przehowywanie nazw klas
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">classes_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+        <span class="c1"># Zapis liczby atrybutow
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">n_features</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="c1"># Czy liczba cech w podprzestrzeni jest mniejsza od calkowitej liczby cech
+</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_subspace_features</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_features</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="nb">ValueError</span><span class="p">(</span><span class="s">"Number of features in subspace higher than number of features."</span><span class="p">)</span>
+</code></pre></div></div>
+<p>Dopiero teraz przechodzimy do właściwego działania. Losujemy numery indeksów podprzestrzeni cech dla modeli, które będą tworzyć projektowany komitet. Indeksy te musimy zapisać w zmiennej <code class="highlighter-rouge">self.subspaces</code>, ponieważ będą później potrzebne podczas predykcji. Następnie tworzymy pusty komitet <code class="highlighter-rouge">self.ensembles_</code> i wypełniamy go modelami wyuczonymi na wcześniej wylosowanych podprzestrzeniach cech. Teraz istotny krok, to użycie do tego metody <code class="highlighter-rouge">clone()</code>. Jest to bardzo ważne, aby tworząc nowe modele “klonować” je. Może się zdarzyć sytuacja taka, że bez użycia tej funkcji zespół będzie składać się z wielu, ale niestety identycznych modeli.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>        <span class="c1"># Wylosowanie podprzestrzeni cech
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">subspaces</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_features</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_estimators</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_subspace_features</span><span class="p">))</span>
+
+        <span class="c1"># Wyuczenie nowych modeli i stworzenie zespolu
+</span>        <span class="bp">self</span><span class="o">.</span><span class="n">ensemble_</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_estimators</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ensemble_</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">clone</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_estimator</span><span class="p">)</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">subspaces</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span> <span class="n">y</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></div>
+
+<h4 id="predykcja">Predykcja</h4>
+
+<p>Podobnie jak na początku uczenia musimy dokonać pewnych kontroli. Po pierwsze sprawdzamy czy nasz komitet jest wyuczony. Takie zabezpieczenie uchroni przed nierozważnymi użytkownikami naszej implementacji, którzy zapragną coś sklasyfikować bez wcześniejszego wyuczenia metody. Następnie kontrola poprawności danych i zgodności liczby cech z danymi użytych do uczenia.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="c1"># Sprawdzenie czy modele sa wyuczone
+</span>        <span class="n">check_is_fitted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">"classes_"</span><span class="p">)</span>
+        <span class="c1"># Sprawdzenie poprawnosci danych
+</span>        <span class="n">X</span> <span class="o">=</span> <span class="n">check_array</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="c1"># Sprawdzenie czy liczba cech się zgadza
+</span>        <span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_features</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="nb">ValueError</span><span class="p">(</span><span class="s">"number of features does not match"</span><span class="p">)</span>
+</code></pre></div></div>
+<p>Mając już pewność, że wszystko się zgadza możemy przystąpić do predykcji. W tym miejscu pojawia się wspomniany wcześniej parametr <code class="highlighter-rouge">hard_voting</code>. Na samym wstępie został opisany sposób głosowania twardego. Z wykorzystaniem takiej reguły decyzyjnej każdy model wskazuje etykietę dla każdej próbki, a na podstawie większości wskazań podejmowana jest ostateczna predykcja całego zespołu.</p>
+
+<p>Implementacja przebiega w następujący sposób. Na początku tworzona jest pusta lista <code class="highlighter-rouge">pred_</code>, które zostaje wypełniona predykcjami poszczególnych modeli. Pamiętamy o tym, że dobieramy odpowiednie podprzestrzenie cech tak samo jak podczas uczenia. Później zamieniana ona jest na macierz typu <code class="highlighter-rouge">ndarray</code> z biblioteki <code class="highlighter-rouge">numpy</code>. Następnie po dokonaniu transpozycji (<code class="highlighter-rouge">pred_.T</code>), predykcje lądują w funkcji pozwalającej na podliczenie maksymalnej liczby etykiet dla poszczególnych próbek. Na sam koniec zwracana jest ostateczna predykcja całego zespołu.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hard_voting</span><span class="p">:</span>
+            <span class="c1"># Podejmowanie decyzji na podstawie twardego glosowania
+</span>            <span class="n">pred_</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="c1"># Modele w zespole dokonuja predykcji
+</span>            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">member_clf</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ensemble_</span><span class="p">):</span>
+                <span class="n">pred_</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member_clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">subspaces</span><span class="p">[</span><span class="n">i</span><span class="p">]]))</span>
+            <span class="c1"># Zamiana na miacierz numpy (ndarray)
+</span>            <span class="n">pred_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pred_</span><span class="p">)</span>
+            <span class="c1"># Liczenie glosow
+</span>            <span class="n">prediction</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">apply_along_axis</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">x</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">arr</span><span class="o">=</span><span class="n">pred_</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+            <span class="c1"># Zwrocenie predykcji calego zespolu
+</span>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">classes_</span><span class="p">[</span><span class="n">prediction</span><span class="p">]</span>
+</code></pre></div></div>
+<p>Decyzję można również podejmować za pomocą głosowania miękkiego. Jest to podejście, które również warto poznać. Predykcja jest tutaj oparta na średniej wartości wektorów wsparcia modeli tworzących zespół klasyfikatorów. W pierwszym kroku trzeba pobrać wspomniane wcześniej wektory wsparcia ze wszystkich modeli (funkcja <code class="highlighter-rouge">ensemble_support_matrix</code>). Tutaj również musimy pamiętać o tym, że dobieramy odpowiednie podprzestrzenie cech dla modeli. Estymacja wektorów wsparcia określi nam prawdopodobieństwo przynależności klasyfikowanego obiektu do każdej istniejącej klasy. W odpowiedzi (<code class="highlighter-rouge">esm</code>) nie uzyskamy więc macierzy etykiet, a macierz wartości zmiennoprzecinkowych. Następnie za pomocą funkcji <code class="highlighter-rouge">np.mean</code> obliczamy średnie wsparcie. W kolejnym kroku wskazujemy, która klasa posiada najwyższe prawdopodobieństwo przynależności dla danego obiektu <code class="highlighter-rouge">np.argmax</code>, aby na koniec zwrócić uzyskane predykcje.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Podejmowanie decyzji na podstawie wektorow wsparcia
+</span>            <span class="n">esm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ensemble_support_matrix</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+            <span class="c1"># Wyliczenie sredniej wartosci wsparcia
+</span>            <span class="n">average_support</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">esm</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="c1"># Wskazanie etykiet
+</span>            <span class="n">prediction</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">average_support</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="c1"># Zwrocenie predykcji calego zespolu
+</span>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">classes_</span><span class="p">[</span><span class="n">prediction</span><span class="p">]</span>
+</code></pre></div></div>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="k">def</span> <span class="nf">ensemble_support_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="c1"># Wyliczenie macierzy wsparcia
+</span>        <span class="n">probas_</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">member_clf</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ensemble_</span><span class="p">):</span>
+            <span class="n">probas_</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member_clf</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">subspaces</span><span class="p">[</span><span class="n">i</span><span class="p">]]))</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">probas_</span><span class="p">)</span>
+</code></pre></div></div>
+<h2 id="proste-eksperymenty">Proste eksperymenty</h2>
+
+<p>Stworzyliśmy już zespół klasyfikatorów, więc dobrze byłoby sprawdzić czy ta implementacja w ogóle działa. Przeprowadzenie paru bardzo prostych eksperymentów pozwoli nam na szybkie sprawdzenie działania oraz obserwację wpływu niektórych parametrów na jakość predykcji komitetu. Pamiętajmy, że będą to raczej badania uproszczone, co nie pozwali na bezapelacyjne stwierdzenia i wnioski.</p>
+
+<h3 id="przygotowanie">Przygotowanie</h3>
+
+<p>Na początek importujemy odpowiednie “narzędzia”, które pozwolą na przeprowadzenie prostych testów naszej metody. Klasycznie biblioteka <code class="highlighter-rouge">numpy</code>, do tego nowa metoda <code class="highlighter-rouge">RandomSubspaceEnsemble</code>. Przydałby się też jakiś bazowy klasyfikator w tym wypadku użyjemy <code class="highlighter-rouge">GaussianNB</code>. Aby dodać odrobinę rzetelności naszym testom użyjemy walidacji krzyżowej <code class="highlighter-rouge">RepeatedStratifiedKFold</code>, a komitet zmierzymy jak dokładnie działa za pomocą <code class="highlighter-rouge">accuracy_score</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">from</span> <span class="nn">rse</span> <span class="kn">import</span> <span class="n">RandomSubspaceEnsemble</span>
+<span class="kn">from</span> <span class="nn">sklearn.naive_bayes</span> <span class="kn">import</span> <span class="n">GaussianNB</span>
+<span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">RepeatedStratifiedKFold</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">accuracy_score</span>
+</code></pre></div></div>
+
+<p>Wczytujemy wybrany zbiór danych. Tym razem stawiam na dane ze zbioru <code class="highlighter-rouge">ionosphere</code>, ale gorąco zachęcam do samodzielnych prób z innymi zbiorami. Jak już dane zostanę wczytane oraz podzielone na cechy i etykiety cenną informacją będzie liczba cech. W tym wypadku są to 34 różne atrybuty.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">dataset</span> <span class="o">=</span> <span class="s">'ionosphere'</span>
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">"datasets/</span><span class="si">%</span><span class="s">s.csv"</span> <span class="o">%</span> <span class="p">(</span><span class="n">dataset</span><span class="p">),</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">","</span><span class="p">)</span>
+<span class="n">X</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Jak już dane zostanę wczytane oraz podzielone na cechy i etykiety cenną informacją będzie liczba cech. W tym wypadku są to 34 różne atrybuty.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="s">"Total number of features"</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</code></pre></div></div>
+
+<p>Następnie musimy przyszykować sobie ustawienia do walidacji krzyżowej. W tym wypadku wystarczą 10 powtórzeń z podziałem 5 części. Pamiętamy o ustawieniu <code class="highlighter-rouge">random_state</code></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">n_splits</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">n_repeats</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">rskf</span> <span class="o">=</span> <span class="n">RepeatedStratifiedKFold</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="n">n_splits</span><span class="p">,</span> <span class="n">n_repeats</span><span class="o">=</span><span class="n">n_repeats</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="eksperyment-pierwszy">Eksperyment pierwszy</h3>
+
+<p>Na początek sprawdźmy jaki wpływ na metodę posiada wybrany tryb podejmowania decyzji - twarde i miękkie głosowanie. W tym celu stworzymy sobie dwa identyczne testy, gdzie jedyną różnicą będzie parametr <code class="highlighter-rouge">hard_voting</code> raz ustawiony na wartość <code class="highlighter-rouge">True</code>, a w drugim podejściu na wartość <code class="highlighter-rouge">False</code>. Wiedząc, że posiadamy 34 cechy spokojnie możemy pozostawić wartość 5 cech na jedną podprzestrzeń. Liczba estymatorów i jednocześnie podprzestrzeni równa 10. Obie te wartości są domyślne.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Hard voting - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+
+<span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Soft voting - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+</code></pre></div></div>
+
+<p>Uzyskane wyniki wskazują, że średnia dokładność predykcji podczas tego testu jest lepsza dla głosowania miękkiego. Głosowanie twarde wykazuje mniejsze odchylenie standardowe.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Hard voting - accuracy score: 0.800 (0.045)
+Soft voting - accuracy score: 0.823 (0.053)
+</code></pre></div></div>
+
+<h3 id="eksperyment-drugi">Eksperyment drugi</h3>
+
+<p>Kolejna właściwość jaką można sprawdzić to wpływ liczby cech użytej do stworzenia jednej podprzestrzeni. W tym wypadku przetestowana zostaną przetestowane trzy różne wartości 10, 15 i 20 cech.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"10/34 features - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+
+<span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"15/34 features - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+
+<span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"20/34 features - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+</code></pre></div></div>
+
+<p>Wyniki pokazują, że najlepszy wynik uzyskuje liczba 15 cech.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>10/34 features - accuracy score: 0.830 (0.050)
+15/34 features - accuracy score: 0.855 (0.045)
+20/34 features - accuracy score: 0.851 (0.047)
+</code></pre></div></div>
+
+<h3 id="eksperyment-trzeci">Eksperyment trzeci</h3>
+
+<p>Ostatni eksperyment ma na celu sprawdzenie doboru liczby klasyfikatorów, tworzących jeden zespół. W tym teście zostały wybrane wartości 5, 10 i 15.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"5 estimators - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+
+<span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"10 estimators - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+
+<span class="n">clf</span> <span class="o">=</span> <span class="n">RandomSubspaceEnsemble</span><span class="p">(</span><span class="n">base_estimator</span><span class="o">=</span><span class="n">GaussianNB</span><span class="p">(),</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">n_subspace_features</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">hard_voting</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+    <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"15 estimators - accuracy score: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.3</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">)))</span>
+</code></pre></div></div>
+
+<p>Wyniki pokazują, że najlepsze rezultaty metoda uzyskuje posiadając 10 modeli tworzących zespół.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>5 estimators - accuracy score: 0.840 (0.051)
+10 estimators - accuracy score: 0.855 (0.045)
+15 estimators - accuracy score: 0.854 (0.041)
+</code></pre></div></div>
+
+<h3 id="wnioski">Wnioski</h3>
+
+<p>Z przeprowadzonych badań można wyciągnąć parę ciekawych wniosków. Po pierwsze widać, że zaprojektowany zespół posiada parametry, które znacząco wpływają na jakość działania. Dobór odpowiednich wartości parametrów, może okazać się kluczowy podczas wykorzystywania tej metody. Kolejny wniosek jaki się nasuwa to, że nie zawsze więcej oznacza lepiej. Zauważalne jest to, że większa liczba estymatorów lub cech w podprzestrzeni nie zawsze daje polepszenie dokładności. Tutaj trzeba raczej szukać wartości wyważonej, niekoniecznie bardzo dużej. Nie było to sprawdzane, ale można się domyślać, że większa liczba estymatorów lub cech w podprzestrzeni może się wiązać z większym obciążeniem procesora, a co za tym idzie wydłużonym czasem działania. Pamiętajmy jednak, że są to tylko pewne hipotezy, które wymagają szerszego przebadania w celu uzyskania potwierdzenia.</p>
+
+<p>To by było na tyle dzisiaj. Gorąco namawiam do “zabawy” z użyciem zaprezentowanej tu implementacji zespołu klasyfikatorów opartego na losowych podprzestrzeniach cech. Może jakiś własny pomysł na dywersyfikację zespołu lub ciekawy test tego zespołu. Może wyjdą inne wyniki, może dla innych danych lub jakiś własnych eksperymentów. Może nasunął się jakieś nowe wnioski, czy powstaną modyfikacje tego kodu. Wszystkie osoby, którym uda się coś napisać lub zrobić, ogromnie zachęcam do podzielenia się swoimi implementacjami lub wnioskami mailowo. Czekam z wielką niecierpliwością!</p>
+
+<p>jakub.klikowski@pwr.edu.pl</p>
+:ET

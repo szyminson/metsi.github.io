@@ -1,0 +1,238 @@
+I":w<p><em>“Some people use statistics as a drunk man uses lamp posts–for support rather than for illumination.”</em><br />
+– Prawdopodobnie Andrew Lang inspirowany tekstem napisanym w 1903 roku przez A. E. Housmana</p>
+
+<!--more-->
+
+<p>Kolejny piątek, więc i kolejny zestaw przykładów. Dzisiaj weźmiemy na tapet (<strong>absolutnie nie na tapetę</strong>) parowe testy statystyczne.</p>
+
+<h2 id="eksperyment">Eksperyment</h2>
+
+<p>Jako, że poprzedni wpis koncentrował się na przeprowadzaniu eksperymentów z wykorzystaniem powtarzanej walidacji krzyżowej, dzisiaj nie poświęcimy temu etapowi wiele uwagi. Wyróżnimy tylko te drobne elementy, które mogą być dla nas nowe.</p>
+
+<h3 id="przygotowanie-danych">Przygotowanie danych</h3>
+
+<p>Jak zwykle zaczynamy od danych, ale tym razem nie będę już one syntetyczne. Ostatnio bliskim mi krajem stała się chwilowo Australia, skorzystamy więc ze zbioru danych <code class="highlighter-rouge">australian</code> dostępnego na repozytorium <a href="https://sci2s.ugr.es/keel/category.php?cat=clas">KEEL</a>. Zestaw ten można pobrać także w postaci <a href="https://github.com/w4k2/benchmark_datasets/blob/master/datasets/australian.csv">pliku CSV</a> z repozytorium <code class="highlighter-rouge">benchmark_datasets</code> autorstwa dr. (<strong>tak, z kropką</strong>) Ksieniewicza oraz mojego.</p>
+
+<p>Wczytajmy nasze dane:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="n">dataset</span> <span class="o">=</span> <span class="s">'australian'</span>
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">"</span><span class="si">%</span><span class="s">s.csv"</span> <span class="o">%</span> <span class="p">(</span><span class="n">dataset</span><span class="p">),</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">","</span><span class="p">)</span>
+<span class="n">X</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="zdefiniowanie-i-inicjalizacja-modeli-klasyfikacji">Zdefiniowanie i inicjalizacja modeli klasyfikacji</h3>
+
+<p>Kiedy przeprowadzamy eksperymenty, to najczęściej chcemy coś ze sobą porównać. Z tego powodu wykorzystamy dzisiaj nie jeden, ale trzy modele klasyfikacji. Będą to (i) <em>Naiwny klasyfikator bayesowski</em> (GNB) (ii) <em>klasyfikator k najbliższych sąsiadów</em> (kNN) oraz (iii) <em>drzewo klasyfikacyjne i regresyjne</em> (CART). Modele inicjalizujemy z domyślnymi parametrami, pamiętając o ustawieniu <code class="highlighter-rouge">random_state</code> dla algorytmu CART, i zawieramy je w słowniku <code class="highlighter-rouge">clfs</code>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">sklearn.naive_bayes</span> <span class="kn">import</span> <span class="n">GaussianNB</span>
+<span class="kn">from</span> <span class="nn">sklearn.neighbors</span> <span class="kn">import</span> <span class="n">KNeighborsClassifier</span>
+<span class="kn">from</span> <span class="nn">sklearn.tree</span> <span class="kn">import</span> <span class="n">DecisionTreeClassifier</span>
+
+<span class="n">clfs</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">'GNB'</span><span class="p">:</span> <span class="n">GaussianNB</span><span class="p">(),</span>
+    <span class="s">'kNN'</span><span class="p">:</span> <span class="n">KNeighborsClassifier</span><span class="p">(),</span>
+    <span class="s">'CART'</span><span class="p">:</span> <span class="n">DecisionTreeClassifier</span><span class="p">(</span><span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="przeprowadzenie-eksperymentu--zapisanie-wyników">Przeprowadzenie eksperymentu &amp; zapisanie wyników</h3>
+
+<p>Teraz rutynowa i nudna już dla nas procedura wielokrotnej walidacji krzyżowej. Zwróćmy uwagę za zdefiniowanie <code class="highlighter-rouge">scores</code> nie jako listy, ale jako dwuwymiarowej macierzy <code class="highlighter-rouge">numpy</code>, w której liczba wierszy odpowiada liczbie testowanych przez nas modeli, a liczba kolumn równa jest liczbie wyników uzyskiwanych w procesie walidacji (tutaj wynoszącej 10).</p>
+
+<p>Dodatkowo warte zauważenia jest wykorzystanie funkcji <code class="highlighter-rouge">enumerate()</code>, która pozwala nam na wprowadzenie inkrementowanego licznika bezpośrednio do pętli, a także użycie znanej z wykładu funkcji <code class="highlighter-rouge">clone()</code> do klonowania klasyfikatorów. Funkcja ta w tym wypadku nie jest konieczna, ale korzystanie z niej na pewno będzie dobrym nawykiem, który zaprocentuje w przyszłości.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">n_splits</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">n_repeats</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">rskf</span> <span class="o">=</span> <span class="n">RepeatedStratifiedKFold</span><span class="p">(</span>
+    <span class="n">n_splits</span><span class="o">=</span><span class="n">n_splits</span><span class="p">,</span> <span class="n">n_repeats</span><span class="o">=</span><span class="n">n_repeats</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="n">n_splits</span> <span class="o">*</span> <span class="n">n_repeats</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">fold_id</span><span class="p">,</span> <span class="p">(</span><span class="n">train</span><span class="p">,</span> <span class="n">test</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">rskf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">)):</span>
+    <span class="k">for</span> <span class="n">clf_id</span><span class="p">,</span> <span class="n">clf_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">clfs</span><span class="p">):</span>
+        <span class="n">clf</span> <span class="o">=</span> <span class="n">clone</span><span class="p">(</span><span class="n">clfs</span><span class="p">[</span><span class="n">clf_name</span><span class="p">])</span>
+        <span class="n">clf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">train</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train</span><span class="p">])</span>
+        <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">test</span><span class="p">])</span>
+        <span class="n">scores</span><span class="p">[</span><span class="n">clf_id</span><span class="p">,</span> <span class="n">fold_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">test</span><span class="p">],</span> <span class="n">y_pred</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Teraz przedstawmy uzyskane wyniki tak, jak było to robione w poprzednim wpisie:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">clf_id</span><span class="p">,</span> <span class="n">clf_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">clfs</span><span class="p">):</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="si">%</span><span class="s">s: </span><span class="si">%.3</span><span class="s">f (</span><span class="si">%.2</span><span class="s">f)"</span> <span class="o">%</span> <span class="p">(</span><span class="n">clf_name</span><span class="p">,</span> <span class="n">mean</span><span class="p">[</span><span class="n">clf_id</span><span class="p">],</span> <span class="n">std</span><span class="p">[</span><span class="n">clf_id</span><span class="p">]))</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; GNB: 0.789 (0.02)
+&gt;&gt; kNN: 0.708 (0.03)
+&gt;&gt; CART: 0.810 (0.03)
+</code></pre></div></div>
+
+<p>Jak widzimy, najwyższą wartości jakości klasyfikacji uzyskał algorytm CART, o 2% gorszy okazał się GNB, a kNN to już zupełnie najgorzej.</p>
+
+<p>Jednak czy powyższe wyniki pozwalają nam na bezsprzeczne stwierdzenie, że CART jest w tym przypadku najlepszym modelem klasyfikacji? Absolutnie nie. Dlatego właśnie korzystamy z testów statystycznych.</p>
+
+<p>Zanim jednak przejdziemy do właściwego tematu dzisiejszego dnia, zastosujmy starą harcerską sztuczkę z wykorzystaniem funkcji <code class="highlighter-rouge">save()</code> biblioteki <code class="highlighter-rouge">numpy</code>. Dzięki temu możemy zapisać uzyskane przez nas wyniki z poszczególnych foldów do pliku NPY i wykorzystać go w osobnym skrypcie do analizy statystycznej. Warto zapamiętać tą funkcję, ponieważ okazuje się ona bardzo przydatna podczas prowadzenia badań. Jeżeli nasze obliczenia trwają długo, to nie chcemy przecież uruchamiać ich za każdym razem od nowa, aby mieć wygodny dostęp do wyników.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s">'results'</span><span class="p">,</span> <span class="n">scores</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="analiza-statystyczna">Analiza statystyczna</h2>
+
+<p>W końcu nadszedł czas na clou dzisiejszego wpisu, czyli parowe testy statystyczne. Mają one na celu porównanie między sobą modeli <em>każdy z każdym</em> i ewentualne wskazanie w każdej z par, czy jeden z modeli jest statystycznie znacząco lepszy od drugiego.</p>
+
+<h3 id="wczytanie-wyników-eksperymentu">Wczytanie wyników eksperymentu</h3>
+
+<p>Zaczniemy od wczytania wcześniej zapisanych wyników poszczególnych foldów walidacji krzyżowej:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="n">scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s">'results.npy'</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Folds:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">scores</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; Folds:
+&gt;&gt; [[0.77697842 0.76258993 0.79710145 0.80291971 0.81751825 0.75539568
+&gt;&gt;  0.81294964 0.76086957 0.81751825 0.78832117]
+&gt;&gt; [0.67625899 0.69064748 0.70289855 0.76642336 0.69343066 0.68345324
+&gt;&gt;  0.67625899 0.70289855 0.72992701 0.75912409]
+&gt;&gt; [0.79856115 0.83453237 0.81884058 0.83941606 0.75182482 0.76978417
+&gt;&gt;  0.79856115 0.8115942  0.86131387 0.81751825]]
+</code></pre></div></div>
+<p>Wszystko jest na swoim miejscu, nic nie zginęło, możemy więc brać się do pracy.</p>
+
+<h3 id="t-statystyka-oraz-p-wartość">t-statystyka oraz p-wartość</h3>
+
+<p>Jednymi z częściej wykorzystywanych statystycznych testów parowych, jeżeli chodzi o badania związane z uczeniem maszynowym, są <em>test T Studenta</em> oraz <em>test Wilcoxona</em> (ang. <em>Wilcoxon signed-rank test</em>). My skorzystamy ze znanego z wykładu <em>testu T studenta</em> z poziomem ufności <code class="highlighter-rouge">alpha</code> równym 0.05. Test ten implementuje funkcja <code class="highlighter-rouge">ttest_ind()</code>.</p>
+
+<p>Aby jak najlepiej zrozumieć to, co się za chwilę wydarzy, rozbijemy naszą analizę statystyczną na 5 kroków. Każdy z tych kroków wiąże się z utworzeniem tabeli (macierzy NxN, gdzie N to liczba porównywanych metod) zawierającej odpowiednie informacje. Wszystkie te tabele będziemy czytać <strong>wierszami</strong>.</p>
+
+<p>Pierwsze dwa kroki to przedstawienie w tabelach znanych nam z wykładu wartości t-statystyki (tutaj wskazującej na różnice w jakości klasyfikacji pomiędzy metodami) oraz p-wartości (przyrównywane do wartości <code class="highlighter-rouge">alpha</code> w celu przyjęcia lub odrzucenia hipotezy zerowej) dla każdej pary klasyfikatorów. W tym celu utwórzmy dwie macierze dwuwymiarowe <code class="highlighter-rouge">t_statistic</code> oraz <code class="highlighter-rouge">p_value</code>, a następnie uzupełnijmy je wykorzystując funkcję <code class="highlighter-rouge">ttest_ind()</code>, do której będziemy podawać kolejno jakości klasyfikacji uzyskane przez każdą z par klasyfikatorów w każdym z foldów. Następnie wyświetlmy wyniki:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">ttest_ind</span>
+
+<span class="n">alfa</span> <span class="o">=</span> <span class="mf">.05</span>
+<span class="n">t_statistic</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+<span class="n">p_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)):</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)):</span>
+        <span class="n">t_statistic</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">p_value</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">ttest_ind</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">scores</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"t-statistic:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">t_statistic</span><span class="p">,</span> <span class="s">"</span><span class="se">\n\n</span><span class="s">p-value:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">p_value</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; t-statistic:
+&gt;&gt; [[ 0.          6.29911296 -1.64022221]
+&gt;&gt; [-6.29911296  0.         -6.98938694]
+&gt;&gt; [ 1.64022221  6.98938694  0.        ]]
+&gt;&gt;
+&gt;&gt; p-value:
+&gt;&gt; [[1.00000000e+00 6.14348994e-06 1.18317253e-01]
+&gt;&gt; [6.14348994e-06 1.00000000e+00 1.58542999e-06]
+&gt;&gt; [1.18317253e-01 1.58542999e-06 1.00000000e+00]]
+</code></pre></div></div>
+
+<p>Wartości wydają się być w porządku, na przekątnej macierzy t-statystyki mamy zera (te same wartości jakości klasyfikacji, bo porównujemy klasyfikator sam ze sobą), a na przekątnej p-wartości mamy jedynki (z tego samego powodu).</p>
+
+<p>Trudno jednak ukryć, że powyższa reprezentacja pozostawia wiele do życzenia pod względem wizualnym. Spróbujmy coś na to poradzić, korzystając z biblioteki <code class="highlighter-rouge">tabulate</code>. Biblioteka ta pozwala nam na proste sformatowanie macierzy <code class="highlighter-rouge">numpy</code> do postaci w miarę czytelnej tabeli, a osiągamy to podając do funkcji <code class="highlighter-rouge">tabulate()</code> jako argumenty naszą macierz oraz wcześniej zdefiniowane nagłówki kolumn będące akronimami wykorzystanych metod klasyfikacji (argument <code class="highlighter-rouge">headers</code>). Dodatkowo, za pomocą argumentu <code class="highlighter-rouge">floatfmt</code> możemy ustawić format wyświetlania wartości zmiennoprzecinkowych. Dla polepszenia czytelności, przed wykorzystaniem funkcji <code class="highlighter-rouge">tabulate()</code>, dodajmy z przodu kolumnę zawierającą akronimy klasyfikatorów. Na koniec zobaczmy efekty:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">tabulate</span> <span class="kn">import</span> <span class="n">tabulate</span>
+
+<span class="n">headers</span> <span class="o">=</span> <span class="p">[</span><span class="s">"GNB"</span><span class="p">,</span> <span class="s">"kNN"</span><span class="p">,</span> <span class="s">"CART"</span><span class="p">]</span>
+<span class="n">names_column</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="s">"GNB"</span><span class="p">],</span> <span class="p">[</span><span class="s">"kNN"</span><span class="p">],</span> <span class="p">[</span><span class="s">"CART"</span><span class="p">]])</span>
+<span class="n">t_statistic_table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">names_column</span><span class="p">,</span> <span class="n">t_statistic</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">t_statistic_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">t_statistic_table</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">floatfmt</span><span class="o">=</span><span class="s">".2f"</span><span class="p">)</span>
+<span class="n">p_value_table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">names_column</span><span class="p">,</span> <span class="n">p_value</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">p_value_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">p_value_table</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">floatfmt</span><span class="o">=</span><span class="s">".2f"</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"t-statistic:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">t_statistic_table</span><span class="p">,</span> <span class="s">"</span><span class="se">\n\n</span><span class="s">p-value:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">p_value_table</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; t-statistic:
+&gt;&gt;          GNB    kNN    CART
+&gt;&gt; ----  -----  -----  ------
+&gt;&gt; GNB    0.00   6.30   -1.64
+&gt;&gt; kNN   -6.30   0.00   -6.99
+&gt;&gt; CART   1.64   6.99    0.00
+&gt;&gt;
+&gt;&gt; p-value:
+&gt;&gt;          GNB    kNN    CART
+&gt;&gt; ----  -----  -----  ------
+&gt;&gt; GNB    1.00   0.00    0.12
+&gt;&gt; kNN    0.00   1.00    0.00
+&gt;&gt; CART   0.12   0.00    1.00
+</code></pre></div></div>
+
+<p>O wiele lepiej, człowiek w końcu jest w stanie na to spojrzeć i coś zrozumieć.</p>
+
+<h3 id="przewaga">Przewaga</h3>
+
+<p>Trzecim krokiem będzie wyznaczenie tabeli przewagi, ukazującej, który z klasyfikatorów z pary osiągnął lepszą jakość klasyfikacji. W tym celu tworzymy wypełnioną zerami macierz <code class="highlighter-rouge">advantage</code> i wpisujemy do niej wartości <code class="highlighter-rouge">1</code> tam, gdzie w macierzy <code class="highlighter-rouge">t_statistic</code> występują wartości większe od <code class="highlighter-rouge">0</code>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">advantage</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+<span class="n">advantage</span><span class="p">[</span><span class="n">t_statistic</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">advantage_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+    <span class="p">(</span><span class="n">names_column</span><span class="p">,</span> <span class="n">advantage</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">headers</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Advantage:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">advantage_table</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; Advantage:
+&gt;&gt;          GNB    kNN    CART
+&gt;&gt; ----  -----  -----  ------
+&gt;&gt; GNB       0      1       0
+&gt;&gt; kNN       0      0       0
+&gt;&gt; CART      1      1       0
+</code></pre></div></div>
+
+<p>Dzięki temu wyraźnie widzimy, że GNB jest lepszy od kNN i gorszy od CART, kNN jest najgorszy, a CART osiągnął wartość jakości klasyfikacji większą niż GNB oraz kNN.</p>
+
+<h3 id="różnice-statystycznie-znaczące">Różnice statystycznie znaczące</h3>
+
+<p>Przedostatnim krokiem jest utworzenie macierzy istotności ukazującej, czy różnica pomiędzy daną parą klasyfikatorów jest istotna statystycznie. Dokonujemy tego poprzez przyrównanie p-wartości w tabeli <code class="highlighter-rouge">p-value</code> do naszej wartości <code class="highlighter-rouge">alpha</code> i na tej podstawie przyjęcie bądź odrzucenie hipotezy zerowej (czyli, że pomiędzy klasyfikatorami nie ma istotnej różnicy statystycznej). Jeżeli p-wartość jest mniejsza lub równa <code class="highlighter-rouge">alpha</code> to odrzucamy hipotezę zerową, a jeżeli p-wartość jest większa od <code class="highlighter-rouge">alpha</code>, to przyjmujemy tą hipotezę.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">significance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">clfs</span><span class="p">)))</span>
+<span class="n">significance</span><span class="p">[</span><span class="n">p_value</span> <span class="o">&lt;=</span> <span class="n">alfa</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">significance_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+    <span class="p">(</span><span class="n">names_column</span><span class="p">,</span> <span class="n">significance</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">headers</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Statistical significance (alpha = 0.05):</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">significance_table</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; Statistical significance (alpha = 0.05):
+&gt;&gt;          GNB    kNN    CART
+&gt;&gt; ----  -----  -----  ------
+&gt;&gt; GNB       0      1       0
+&gt;&gt; kNN       1      0       1
+&gt;&gt; CART      0      1       0
+</code></pre></div></div>
+
+<p>Na podstawie tej tabeli możemy stwierdzić, że GNB i kNN oraz CART i kNN są statystycznie od siebie różne.</p>
+
+<h3 id="wynik-końcowy-analizy-statystycznej">Wynik końcowy analizy statystycznej</h3>
+
+<p>Ostatnim krokiem naszej analizy będzie przedstawienie tabeli obserwacji końcowych, która ukaże nam, dla każdego z klasyfikatorów, algorytmy od których jest on statystycznie znacząco lepszy.</p>
+
+<p>W tym celu wykorzystujemy dwie poprzednio utworzone tabele:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">stat_better</span> <span class="o">=</span> <span class="n">significance</span> <span class="o">*</span> <span class="n">advantage</span>
+<span class="n">stat_better_table</span> <span class="o">=</span> <span class="n">tabulate</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+    <span class="p">(</span><span class="n">names_column</span><span class="p">,</span> <span class="n">stat_better</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">headers</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">"Statistically significantly better:</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">stat_better_table</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt; Statistically significantly better:
+&gt;&gt;          GNB    kNN    CART
+&gt;&gt; ----  -----  -----  ------
+&gt;&gt; GNB       0      1       0
+&gt;&gt; kNN       0      0       0
+&gt;&gt; CART      0      1       0
+</code></pre></div></div>
+
+<p>Widzimy, że zarówno GNB jak CART są statystycznie znacząco lepsze od kNN. Nie  mamy natomiast, pomimo różnicy w średniej jakości klasyfikacji, podstaw do stwierdzenia, że CART spisał się lepiej niż GNB. W ewentualnych wnioskach należałoby więc uznać różnice pomiędzy tymi dwiema metodami za nieistotne statystycznie.</p>
+
+<p>Dobrnęliśmy do końca. W przyszłą środę przeprowadzimy badania na wielu zestawach danych i wykonamy globalny rankingowy test statystyczny.</p>
+
+<p><img src="/examples/kod4meme.jpg" alt="" /></p>
+:ET
